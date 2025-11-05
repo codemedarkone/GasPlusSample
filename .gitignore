@@ -1,0 +1,111 @@
+##############
+# Unreal Engine
+##############
+
+# Compiled binaries
+Binaries/
+DerivedDataCache/
+Intermediate/
+Saved/
+Build/*/Binaries/
+
+# Project-specific build files
+*.target
+*.ubuild
+*.ubt
+*.modules
+*.manifest
+
+# VS / IDE
+.vscode/
+.vs/
+*.sln
+*.suo
+*.user
+*.opensdf
+*.sdf
+*.opendb
+*.VC.db
+*.VC.opendb
+
+# macOS
+.DS_Store
+
+# Linux
+*.swp
+
+# Backup
+*.bak
+
+##########
+# C++ 
+##########
+
+*.obj
+*.pdb
+*.ipch
+*.pch
+*.log
+*.tlog
+*.cache
+*.tmp
+*.dmp
+
+# UHT Generated Code
+*.generated.h
+*.generated.cpp
+
+#################
+# Build Products
+#################
+
+# Packaged builds
+Packages/
+Packaged/
+Output/
+Dist/
+
+# Automation / test temp
+Saved/Automation/
+
+###########################
+# Unreal Plugin Structure
+###########################
+
+# Plugin build intermediates
+Plugins/*/Intermediate/
+Plugins/*/Binaries/
+
+###############
+# Marketplace
+###############
+
+# Keep your plugin source + assets
+!Plugins/*/Source/**
+!Plugins/*/*.uplugin
+!Plugins/*/Resources/**
+!Plugins/*/Content/**
+
+##################
+# Engine (optional)
+##################
+
+# Ignore downloaded engines
+/Engine/
+InstalledBuild.xml
+
+########################
+# Optional ignore (choose)
+########################
+
+# Uncomment if you want to ignore editor config changes
+# Config/
+
+# Crash & trace dumps
+*.mdmp
+*.dmp
+*.nls
+
+##############
+# Extra Dev
+##############
