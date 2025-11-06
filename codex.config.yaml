@@ -1,13 +1,32 @@
+
 # codex.config.yaml — Codex configuration for GasPlusSample / GasPlus plugin
-# Located at: /GasPlusSample/codex.config.yaml
+# Place this file at: GasPlusSample/codex.config.yaml
 
 project:
   name: "GasPlusSample"
   plugin: "GasPlus"
   engine_version: "5.6"
   language: "C++"
+  # Optional clarity; Codex will auto-load .env if present in the project root
+  env_file: ".env"
+
+paths:
+  project_root: .
+  plugin_root: Plugins/GasPlus
+  uproject_file: GasPlusSample.uproject
+  generated_code_dir: Source/GasPlusSample/Attributes
+
+rules:
+  deterministic: true
+  fail_fast: true
+  parallel_jobs: true
+  rollback_on_error: true
+  allow_editor_headless: true
 
 agents:
+  # ----------------------
+  # CORE AGENTS (unchanged)
+  # ----------------------
   codegen-agent:
     description: "Generates deterministic AttributeSets, GameplayEffects, and Cue C++ from DataAssets"
     workdir: Plugins/GasPlus/Agents/codegen
@@ -33,12 +52,14 @@ agents:
       - epic2-editor
       - epic7-validation
 
+  # REPLACED original hard-coded path with .env-driven variables
   editor-agent:
     description: "Runs UE Editor commandlets and wizards (Effect/Cue builders, tag guard)"
     workdir: Plugins/GasPlus/Agents/editor
     command: >
-      /path/to/UnrealEditor-Cmd.exe GasPlusSample.uproject
-      -run=GasPlusCommandlet --preset=Effects --quiet
+      ${UE_CMD} ${UPROJECT_PATH}
+      -run=GasPlusCommandlet
+      ${UE_CMD_FLAGS} --preset=Effects --quiet
     labels:
       - epic3-effects
       - epic11-cues
@@ -46,6 +67,12 @@ agents:
   qa-agent:
     description: "Executes automation tests and performance benchmarks"
     workdir: Plugins/GasPlus/Agents/qa
+    command: >
+      ${UE_CMD} ${UPROJECT_PATH}
+      ${UE_CMD_FLAGS}
+      -ExecCmds="Automation RunTests GasPlus; Quit"
+      -ReportExportPath="Saved/Tests/Reports"
+      -nop4
     outputs:
       - Saved/Tests/Reports/**
     timeout: 45m
@@ -63,22 +90,49 @@ agents:
       - epic10-docs
       - docs
 
-paths:
-  project_root: .
-  plugin_root: Plugins/GasPlus
-  uproject_file: GasPlusSample.uproject
-  generated_code_dir: Source/GasPlusSample/Attributes
+  # ----------------------
+  # OPTIONAL / NICE-TO-HAVE AGENTS (added)
+  # ----------------------
+  editor-resave-packages:
+    description: "Resave packages for content fix-ups / tag normalization"
+    workdir: Plugins/GasPlus/Agents/editor
+    command: >
+      ${UE_CMD} ${UPROJECT_PATH}
+      -run=ResavePackages
+      -Package="/Game"
+      -CookerWarnOnly
+      ${UE_CMD_FLAGS}
+    labels:
+      - epic3-effects
 
-rules:
-  deterministic: true
-  fail_fast: true
-  parallel_jobs: true
-  rollback_on_error: true
-  allow_editor_headless: true
+  editor-fixup-redirects:
+    description: "Fix up redirects after class/asset renames"
+    workdir: Plugins/GasPlus/Agents/editor
+    command: >
+      ${UE_CMD} ${UPROJECT_PATH}
+      -run=FixupRedirects
+      -ProjectOnly
+      ${UE_CMD_FLAGS}
+    labels:
+      - epic3-effects
 
-notifications:
-  on_success: true
-  on_failure: true
-  channels:
-    - github_checks
-    - local_console
+  editor-run-python:
+    description: "Execute a Python automation script (if using Editor Utility/Python tools)"
+    workdir: Plugins/GasPlus/Agents/editor
+    command: >
+      ${UE_CMD} ${UPROJECT_PATH}
+      -ExecutePythonScript="Plugins/GasPlus/Scripts/run_effect_presets.py"
+      ${UE_CMD_FLAGS}
+    labels:
+      - epic3-effects
+
+  package-agent:
+    description: "BuildCookRun packaging smoke test (UAT)"
+    workdir: .
+    command: >
+      "${UE_ROOT}/Engine/Build/BatchFiles/RunUAT.bat" BuildCookRun
+      -project="${UPROJECT_PATH}"
+      -build -stage -pak -targetplatform=Win64 -nop4 -unattended
+    timeout: 60m
+    labels:
+      - epic-release
