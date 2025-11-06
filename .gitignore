@@ -109,3 +109,15 @@ InstalledBuild.xml
 ##############
 # Extra Dev
 ##############
+# --- Codex CLI & Agent sandboxes (GASPlus) ---
+# Codex local caches
+.codex-cache/
+.codex-local/
+
+# Plugin agent sandboxes (generated logs/manifests/artifacts)
+Plugins/GasPlus/Agents/**
+!Plugins/GasPlus/Agents/.gitignore
+!Plugins/GasPlus/Agents/**/.gitkeep
+
+# Optional quality-of-life ignores
+Thumbs.db
