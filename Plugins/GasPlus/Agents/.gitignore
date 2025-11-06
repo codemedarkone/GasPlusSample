@@ -1,0 +1,11 @@
+# .gitignore for Plugins/GasPlus/Agents/
+
+# Ignore all generated content from Codex automation agents
+codegen/*
+validation/*
+editor/*
+qa/*
+docs/*
+
+# But keep directory structure
+!.gitkeep

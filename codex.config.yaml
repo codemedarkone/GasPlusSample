@@ -1,0 +1,84 @@
+# codex.config.yaml — Codex configuration for GasPlusSample / GasPlus plugin
+# Located at: /GasPlusSample/codex.config.yaml
+
+project:
+  name: "GasPlusSample"
+  plugin: "GasPlus"
+  engine_version: "5.6"
+  language: "C++"
+
+agents:
+  codegen-agent:
+    description: "Generates deterministic AttributeSets, GameplayEffects, and Cue C++ from DataAssets"
+    workdir: Plugins/GasPlus/Agents/codegen
+    outputs:
+      - Source/GasPlusSample/Attributes/*.h
+      - Source/GasPlusSample/Attributes/*.cpp
+    cache_key:
+      - DataAssets/**
+      - Config/Schema/**
+    timeout: 10m
+    labels:
+      - epic2-codegen
+      - epic12-dataability
+
+  validation-agent:
+    description: "Validates replication flags, NetExecutionPolicies, and schema integrity"
+    workdir: Plugins/GasPlus/Agents/validation
+    outputs:
+      - Plugins/GasPlus/Agents/validation/report.json
+      - Plugins/GasPlus/Agents/validation/summary.md
+    timeout: 5m
+    labels:
+      - epic2-editor
+      - epic7-validation
+
+  editor-agent:
+    description: "Runs UE Editor commandlets and wizards (Effect/Cue builders, tag guard)"
+    workdir: Plugins/GasPlus/Agents/editor
+    command: >
+      /path/to/UnrealEditor-Cmd.exe GasPlusSample.uproject
+      -run=GasPlusCommandlet --preset=Effects --quiet
+    labels:
+      - epic3-effects
+      - epic11-cues
+
+  qa-agent:
+    description: "Executes automation tests and performance benchmarks"
+    workdir: Plugins/GasPlus/Agents/qa
+    outputs:
+      - Saved/Tests/Reports/**
+    timeout: 45m
+    labels:
+      - epic2-qa
+      - epic13-ai
+
+  docs-agent:
+    description: "Regenerates ROADMAP.md, CHANGELOG.md, and documentation assets"
+    workdir: Plugins/GasPlus/Agents/docs
+    outputs:
+      - Plugins/GasPlus/Agents/docs/out/**
+    timeout: 5m
+    labels:
+      - epic10-docs
+      - docs
+
+paths:
+  project_root: .
+  plugin_root: Plugins/GasPlus
+  uproject_file: GasPlusSample.uproject
+  generated_code_dir: Source/GasPlusSample/Attributes
+
+rules:
+  deterministic: true
+  fail_fast: true
+  parallel_jobs: true
+  rollback_on_error: true
+  allow_editor_headless: true
+
+notifications:
+  on_success: true
+  on_failure: true
+  channels:
+    - github_checks
+    - local_console
