@@ -3,8 +3,8 @@
 	"Version": 1,
 	"VersionName": "1.0",
 	"FriendlyName": "GasPlus",
-	"Description": "",
-	"Category": "Other",
+	"Description": "Advanced GAS automation plugin",
+	"Category": "Gameplay",
 	"CreatedBy": "chris",
 	"CreatedByURL": "",
 	"DocsURL": "",
@@ -12,12 +12,17 @@
 	"SupportURL": "",
 	"CanContainContent": true,
 	"IsBetaVersion": true,
-	"IsExperimentalVersion": false,
+	"IsExperimentalVersion": true,
 	"Installed": false,
 	"Modules": [
 		{
 			"Name": "GasPlus",
 			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "GasPlusEditor",
+			"Type": "Editor",
 			"LoadingPhase": "Default"
 		}
 	]
