@@ -141,3 +141,88 @@ agents:
     timeout: 60m
     labels:
       - epic-release
+
+ # Codex configuration — routing by labels + smart autotrigger rules
+# This file wires your Functional Domain labels to agents and adds path-based
+# auto-runs so PRs still do the right thing even if authors forget labels.
+
+# === Codex routing (labels + path autotrigger) ===
+routing:
+  labels:
+    codegen:        [codegen-agent]
+    validation:     [validation-agent]
+    editor-tools:   [editor-agent]
+    qa-tests:       [qa-agent]
+    docs:           [docs-agent]
+    release:        [package-agent]
+
+  autotrigger:
+    - name: validation-on-schemas-and-tags
+      if_changed:
+        - "Content/**/GameplayTags*.ini"
+        - "Config/**/DefaultGameplayTags.ini"
+        - "Content/**/DA_*.uasset"
+        - "Source/**/Attributes/**"
+        - "Plugins/GasPlus/**/Schemas/**"
+      run: [validation-agent]
+
+    - name: validation-on-policy-and-net
+      if_changed:
+        - "Source/**/ASC*/**"
+        - "Source/**/Ability*/**"
+        - "Source/**/GasPlus*/**"
+        - "Config/**/DefaultGame.ini"
+        - "Config/**/DefaultEngine.ini"
+      run: [validation-agent]
+
+    - name: codegen-on-schema-inputs
+      if_changed:
+        - "Plugins/GasPlus/**/Schemas/**"
+        - "Plugins/GasPlus/Agents/codegen/**"
+        - "Content/**/DataAssets/**"
+      run: [codegen-agent]
+
+    - name: editor-tools-changes
+      if_changed:
+        - "Plugins/GasPlus/Source/GasPlusEditor/**"
+        - "Plugins/GasPlus/Content/Editor/**"
+        - "Plugins/GasPlus/Agents/editor/**"
+      run: [editor-agent]
+
+    - name: qa-on-runtime-or-tests
+      if_changed:
+        - "Source/**"
+        - "Plugins/GasPlus/Source/GasPlus/**"
+        - "Plugins/GasPlus/Source/**/AI/**"
+        - "Plugins/GasPlus/Tests/**"
+      run: [qa-agent]
+
+    - name: docs-on-markdown
+      if_changed:
+        - "**/*.md"
+        - "Docs/**"
+      run: [docs-agent]
+
+  combos:
+    data-ability: [codegen-agent, validation-agent]
+
+  legacy_map:
+    epic2-codegen:        [codegen-agent]
+    epic2-editor:         [validation-agent]
+    epic7-validation:     [validation-agent]
+    epic2-qa:             [qa-agent]
+    epic3-effects:        [editor-agent]
+    epic11-cues:          [editor-agent]
+    epic12-dataability:   [codegen-agent, validation-agent]
+    epic13-ai:            [qa-agent]
+    epic10-docs:          [docs-agent]
+    epic-release:         [package-agent]
+
+defaults:
+  on_push_agents: []
+  on_pr_open_agents: []
+
+# Sensible defaults (adjust if you want certain agents to run on every PR)
+defaults:
+  on_push_agents: []
+  on_pr_open_agents: []
