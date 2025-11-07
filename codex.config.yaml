@@ -9,11 +9,16 @@ project:
   language: "C++"
   # Optional clarity; Codex will auto-load .env if present in the project root
   env_file: ".env"
+  agent_spec: "AGENTS.md"
+  fail_fast: true
+  parallel: true
+  log_level: "quiet"
+
 
 paths:
   project_root: .
   plugin_root: Plugins/GasPlus
-  uproject_file: GasPlusSample.uproject
+  uproject_file: "C:/path/to/GasPlusSample/GasPlusSample.uproject"
   generated_code_dir: Source/GasPlusSample/Attributes
 
 rules:
@@ -57,7 +62,7 @@ agents:
     description: "Runs UE Editor commandlets and wizards (Effect/Cue builders, tag guard)"
     workdir: Plugins/GasPlus/Agents/editor
     command: >
-      ${UE_CMD} ${UPROJECT_PATH}
+      ${UE_CMD} "${UPROJECT_PATH}"
       -run=GasPlusCommandlet
       ${UE_CMD_FLAGS} --preset=Effects --quiet
     labels:
@@ -68,7 +73,7 @@ agents:
     description: "Executes automation tests and performance benchmarks"
     workdir: Plugins/GasPlus/Agents/qa
     command: >
-      ${UE_CMD} ${UPROJECT_PATH}
+      ${UE_CMD} "${UPROJECT_PATH}"
       ${UE_CMD_FLAGS}
       -ExecCmds="Automation RunTests GasPlus; Quit"
       -ReportExportPath="Saved/Tests/Reports"
@@ -97,7 +102,7 @@ agents:
     description: "Resave packages for content fix-ups / tag normalization"
     workdir: Plugins/GasPlus/Agents/editor
     command: >
-      ${UE_CMD} ${UPROJECT_PATH}
+      ${UE_CMD} "${UPROJECT_PATH}"
       -run=ResavePackages
       -Package="/Game"
       -CookerWarnOnly
@@ -109,7 +114,7 @@ agents:
     description: "Fix up redirects after class/asset renames"
     workdir: Plugins/GasPlus/Agents/editor
     command: >
-      ${UE_CMD} ${UPROJECT_PATH}
+      ${UE_CMD} "${UPROJECT_PATH}"
       -run=FixupRedirects
       -ProjectOnly
       ${UE_CMD_FLAGS}
@@ -120,7 +125,7 @@ agents:
     description: "Execute a Python automation script (if using Editor Utility/Python tools)"
     workdir: Plugins/GasPlus/Agents/editor
     command: >
-      ${UE_CMD} ${UPROJECT_PATH}
+      ${UE_CMD} "${UPROJECT_PATH}"
       -ExecutePythonScript="Plugins/GasPlus/Scripts/run_effect_presets.py"
       ${UE_CMD_FLAGS}
     labels:
