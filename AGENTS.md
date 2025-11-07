@@ -64,25 +64,107 @@ Each agent executes under a dedicated working dir to maintain clean artifacts an
 
 ---
 
-## 5) PR Labels -> Agent Routing
-Codex triggers agents from PR labels. Multiple labels may run **in parallel**.
+## 5) PR Labels → Agent Routing (Functional Domain)
 
-| Label | Agent(s) | What runs |
+Codex triggers agents from **human-readable labels**. Multiple labels can run **in parallel**.
+
+| Label | What it means | Agents that run |
 |---|---|---|
-| `epic2-codegen` | **codegen-agent** | AttributeSet/DataAbility C++ generation; GameplayEffect/GCCue stubs as configured |
-| `epic2-editor` | **validation-agent** | Schema checks, replication flags, NetExecutionPolicies, tag registry validation |
-| `epic7-validation` | **validation-agent** | Targeted validation run for schema or replication exception reviews |
-| `epic2-qa` | **qa-agent** | Replication/prediction/unit tests, join-in-progress, perf smoke |
-| `epic3-effects` | **editor-agent** | Effect Preset Builder commandlets / editor utilities |
-| `epic11-cues` | **editor-agent** | GameplayCue Preset Tool generation |
-| `epic12-dataability` | **codegen-agent**, **validation-agent** | Data-Driven Ability base generation & validation |
-| `epic13-ai` | **qa-agent** | BT task/decorator nodes tests and AI load |
-| `docs` / `epic10-docs` | **docs-agent** | Rebuild README, ROADMAP.md, CHANGELOG.md, Quick Start |
-| `epic-release` | **package-agent** | Run BuildCookRun packaging smoke test |
+| `codegen` | Generate/refresh C++ (AttributeSets, stubs, DataAbility bases) | **codegen-agent** |
+| `validation` | Replication, NetExecutionPolicies, tag guard, schema checks | **validation-agent** |
+| `editor-tools` | Effect/Cue builders, tag registry edits, editor utilities | **editor-agent** |
+| `qa-tests` | Unit/functional, prediction/JIP, perf & AI load tests | **qa-agent** |
+| `docs` | Rebuild docs, roadmap, changelog, quick start | **docs-agent** |
+| `release` | Package/BuildCookRun smoke tests | **package-agent** |
 
-> Tip: Add labels in your PR description or via repo automation. All agents are safe to re-run.
+### Legacy labels (temporary compatibility)
+The following legacy labels will be **auto-mapped** during the transition window:
+`epic2-codegen → codegen`, `epic2-editor → validation`, `epic7-validation → validation`,
+`epic2-qa → qa-tests`, `epic3-effects → editor-tools`, `epic11-cues → editor-tools`,
+`epic12-dataability → codegen + validation`, `epic13-ai → qa-tests`,
+`epic10-docs → docs`, `epic-release → release`.
 
----
+## 5.1 Recommended CI Pipeline (Parallel + Cheap)
+
+**Goal:** fast signal → safe merge → deep confidence.
+
+1. **PreCheck (fast)**
+   - Lint/format + schema parse
+   - **validation-agent** (replication, NetExecutionPolicies, tag registry, schema completeness)
+2. **Build & Codegen** *(in parallel where possible)*
+   - **codegen-agent** (if inputs changed) → compile project
+   - Follow with **validation-agent** to confirm generated outputs
+3. **QA/Test Stage** *(gated on 1 & 2 passing)*
+   - **qa-agent**: unit/functional, prediction/JIP, AI load/perf smoke; export reports
+4. **Docs Stage** *(always safe to parallelize)*
+   - **docs-agent**
+5. **Release/Package (on demand)**
+   - **package-agent** on `release` label/branch; BuildCookRun smoke
+
+## 5.2 Path-based Auto-routing (Augments Labels; does **not** replace)
+
+Codex also auto-runs agents when specific paths change, so authors don’t need to remember labels. Labels still work and can force extra runs.
+
+```yaml
+routing:
+  labels:
+    codegen:        [codegen-agent]
+    validation:     [validation-agent]
+    editor-tools:   [editor-agent]
+    qa-tests:       [qa-agent]
+    docs:           [docs-agent]
+    release:        [package-agent]
+
+  autotrigger:
+    - name: validation-on-schemas-and-tags
+      if_changed:
+        - "Content/**/GameplayTags*.ini"
+        - "Config/**/DefaultGameplayTags.ini"
+        - "Content/**/DA_*.uasset"
+        - "Source/**/Attributes/**"
+        - "Plugins/GasPlus/**/Schemas/**"
+      run: [validation-agent]
+
+    - name: validation-on-policy-and-net
+      if_changed:
+        - "Source/**/ASC*/**"
+        - "Source/**/Ability*/**"
+        - "Source/**/GasPlus*/**"
+        - "Config/**/DefaultGame.ini"
+        - "Config/**/DefaultEngine.ini"
+      run: [validation-agent]
+
+    - name: codegen-on-schema-inputs
+      if_changed:
+        - "Plugins/GasPlus/**/Schemas/**"
+        - "Plugins/GasPlus/Agents/codegen/**"
+        - "Content/**/DataAssets/**"
+      run: [codegen-agent]
+
+    - name: editor-tools-changes
+      if_changed:
+        - "Plugins/GasPlus/Source/GasPlusEditor/**"
+        - "Plugins/GasPlus/Content/Editor/**"
+        - "Plugins/GasPlus/Agents/editor/**"
+      run: [editor-agent]
+
+    - name: qa-on-runtime-or-tests
+      if_changed:
+        - "Source/**"
+        - "Plugins/GasPlus/Source/GasPlus/**"
+        - "Plugins/GasPlus/Source/**/AI/**"
+        - "Plugins/GasPlus/Tests/**"
+      run: [qa-agent]
+
+    - name: docs-on-markdown
+      if_changed:
+        - "**/*.md"
+        - "Docs/**"
+      run: [docs-agent]
+
+  combos:
+    data-ability: [codegen-agent, validation-agent]
+```
 
 ## 6) Agent Specs
 
@@ -174,7 +256,7 @@ $UE_CMD "$PROJECT" -run=GasPlusCommandlet -Preset=Effects --quiet
 
 ---
 
-## 14) Glossary
+## 7) Glossary
 - **ASC**: Ability System Component (Unreal GAS)
 - **Meta-attributes**: Derived attributes used for effect routing (e.g., Damage, Heal, ShieldDelta)
 - **JIP**: Join-in-progress networking scenario
