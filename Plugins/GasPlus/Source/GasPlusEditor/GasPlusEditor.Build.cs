@@ -16,8 +16,8 @@ public class GasPlusEditor : ModuleRules
                 "Slate",
                 "SlateCore",
                 "Projects",
-                "GameplayTags",
-                "GasPlusSample"
+                "GameplayTags"
+
             }
         );
 
