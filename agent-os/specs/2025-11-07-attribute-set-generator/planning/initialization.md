@@ -1,0 +1,1 @@
+Feature Idea: AttributeSet Generator\nSummary: Offer a tool that ingests DataAssets and produces complete native AttributeSet headers/cpp with replication hooks and meta-attribute registries, so teams can define stats in data and immediately compile without hand-editing GAS boilerplate.

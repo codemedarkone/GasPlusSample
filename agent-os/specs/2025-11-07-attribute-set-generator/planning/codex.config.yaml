@@ -1,0 +1,228 @@
+
+# codex.config.yaml — Codex configuration for GasPlusSample / GasPlus plugin
+# Place this file at: GasPlusSample/codex.config.yaml
+
+project:
+  name: "GasPlusSample"
+  plugin: "GasPlus"
+  engine_version: "5.6"
+  language: "C++"
+  # Optional clarity; Codex will auto-load .env if present in the project root
+  env_file: ".env"
+  agent_spec: "AGENTS.md"
+  fail_fast: true
+  parallel: true
+  log_level: "quiet"
+
+
+paths:
+  project_root: .
+  plugin_root: Plugins/GasPlus
+  uproject_file: "C:/path/to/GasPlusSample/GasPlusSample.uproject"
+  generated_code_dir: Source/GasPlusSample/Attributes
+
+rules:
+  deterministic: true
+  fail_fast: true
+  parallel_jobs: true
+  rollback_on_error: true
+  allow_editor_headless: true
+
+agents:
+  # ----------------------
+  # CORE AGENTS (unchanged)
+  # ----------------------
+  codegen-agent:
+    description: "Generates deterministic AttributeSets, GameplayEffects, and Cue C++ from DataAssets"
+    workdir: Plugins/GasPlus/Agents/codegen
+    outputs:
+      - Source/GasPlusSample/Attributes/*.h
+      - Source/GasPlusSample/Attributes/*.cpp
+    cache_key:
+      - DataAssets/**
+      - Config/Schema/**
+    timeout: 10m
+    labels:
+      - epic2-codegen
+      - epic12-dataability
+
+  validation-agent:
+    description: "Validates replication flags, NetExecutionPolicies, and schema integrity"
+    workdir: Plugins/GasPlus/Agents/validation
+    outputs:
+      - Plugins/GasPlus/Agents/validation/report.json
+      - Plugins/GasPlus/Agents/validation/summary.md
+    timeout: 5m
+    labels:
+      - epic2-editor
+      - epic7-validation
+
+  # REPLACED original hard-coded path with .env-driven variables
+  editor-agent:
+    description: "Runs UE Editor commandlets and wizards (Effect/Cue builders, tag guard)"
+    workdir: Plugins/GasPlus/Agents/editor
+    command: >
+      ${UE_CMD} "${UPROJECT_PATH}"
+      -run=GasPlusCommandlet
+      ${UE_CMD_FLAGS} --preset=Effects --quiet
+    labels:
+      - epic3-effects
+      - epic11-cues
+
+  qa-agent:
+    description: "Executes automation tests and performance benchmarks"
+    workdir: Plugins/GasPlus/Agents/qa
+    command: >
+      ${UE_CMD} "${UPROJECT_PATH}"
+      ${UE_CMD_FLAGS}
+      -ExecCmds="Automation RunTests GasPlus; Quit"
+      -ReportExportPath="Saved/Tests/Reports"
+      -nop4
+    outputs:
+      - Saved/Tests/Reports/**
+    timeout: 45m
+    labels:
+      - epic2-qa
+      - epic13-ai
+
+  docs-agent:
+    description: "Regenerates ROADMAP.md, CHANGELOG.md, and documentation assets"
+    workdir: Plugins/GasPlus/Agents/docs
+    outputs:
+      - Plugins/GasPlus/Agents/docs/out/**
+    timeout: 5m
+    labels:
+      - epic10-docs
+      - docs
+
+  # ----------------------
+  # OPTIONAL / NICE-TO-HAVE AGENTS (added)
+  # ----------------------
+  editor-resave-packages:
+    description: "Resave packages for content fix-ups / tag normalization"
+    workdir: Plugins/GasPlus/Agents/editor
+    command: >
+      ${UE_CMD} "${UPROJECT_PATH}"
+      -run=ResavePackages
+      -Package="/Game"
+      -CookerWarnOnly
+      ${UE_CMD_FLAGS}
+    labels:
+      - epic3-effects
+
+  editor-fixup-redirects:
+    description: "Fix up redirects after class/asset renames"
+    workdir: Plugins/GasPlus/Agents/editor
+    command: >
+      ${UE_CMD} "${UPROJECT_PATH}"
+      -run=FixupRedirects
+      -ProjectOnly
+      ${UE_CMD_FLAGS}
+    labels:
+      - epic3-effects
+
+  editor-run-python:
+    description: "Execute a Python automation script (if using Editor Utility/Python tools)"
+    workdir: Plugins/GasPlus/Agents/editor
+    command: >
+      ${UE_CMD} "${UPROJECT_PATH}"
+      -ExecutePythonScript="Plugins/GasPlus/Scripts/run_effect_presets.py"
+      ${UE_CMD_FLAGS}
+    labels:
+      - epic3-effects
+
+  package-agent:
+    description: "BuildCookRun packaging smoke test (UAT)"
+    workdir: .
+    command: >
+      "${UE_ROOT}/Engine/Build/BatchFiles/RunUAT.bat" BuildCookRun
+      -project="${UPROJECT_PATH}"
+      -build -stage -pak -targetplatform=Win64 -nop4 -unattended
+    timeout: 60m
+    labels:
+      - epic-release
+
+ # Codex configuration — routing by labels + smart autotrigger rules
+# This file wires your Functional Domain labels to agents and adds path-based
+# auto-runs so PRs still do the right thing even if authors forget labels.
+
+# === Codex routing (labels + path autotrigger) ===
+routing:
+  labels:
+    codegen:        [codegen-agent]
+    validation:     [validation-agent]
+    editor-tools:   [editor-agent]
+    qa-tests:       [qa-agent]
+    docs:           [docs-agent]
+    release:        [package-agent]
+
+  autotrigger:
+    - name: validation-on-schemas-and-tags
+      if_changed:
+        - "Content/**/GameplayTags*.ini"
+        - "Config/**/DefaultGameplayTags.ini"
+        - "Content/**/DA_*.uasset"
+        - "Source/**/Attributes/**"
+        - "Plugins/GasPlus/**/Schemas/**"
+      run: [validation-agent]
+
+    - name: validation-on-policy-and-net
+      if_changed:
+        - "Source/**/ASC*/**"
+        - "Source/**/Ability*/**"
+        - "Source/**/GasPlus*/**"
+        - "Config/**/DefaultGame.ini"
+        - "Config/**/DefaultEngine.ini"
+      run: [validation-agent]
+
+    - name: codegen-on-schema-inputs
+      if_changed:
+        - "Plugins/GasPlus/**/Schemas/**"
+        - "Plugins/GasPlus/Agents/codegen/**"
+        - "Content/**/DataAssets/**"
+      run: [codegen-agent]
+
+    - name: editor-tools-changes
+      if_changed:
+        - "Plugins/GasPlus/Source/GasPlusEditor/**"
+        - "Plugins/GasPlus/Content/Editor/**"
+        - "Plugins/GasPlus/Agents/editor/**"
+      run: [editor-agent]
+
+    - name: qa-on-runtime-or-tests
+      if_changed:
+        - "Source/**"
+        - "Plugins/GasPlus/Source/GasPlus/**"
+        - "Plugins/GasPlus/Source/**/AI/**"
+        - "Plugins/GasPlus/Tests/**"
+      run: [qa-agent]
+
+    - name: docs-on-markdown
+      if_changed:
+        - "**/*.md"
+        - "Docs/**"
+      run: [docs-agent]
+
+  combos:
+    data-ability: [codegen-agent, validation-agent]
+
+  legacy_map:
+    epic2-codegen:        [codegen-agent]
+    epic2-editor:         [validation-agent]
+    epic7-validation:     [validation-agent]
+    epic2-qa:             [qa-agent]
+    epic3-effects:        [editor-agent]
+    epic11-cues:          [editor-agent]
+    epic12-dataability:   [codegen-agent, validation-agent]
+    epic13-ai:            [qa-agent]
+    epic10-docs:          [docs-agent]
+    epic-release:         [package-agent]
+
+defaults:
+  on_push_agents: []
+  on_pr_open_agents: []
+
+# Sensible defaults (adjust if you want certain agents to run on every PR)
+defaults:
+  on_push_agents: []
+  on_pr_open_agents: []
