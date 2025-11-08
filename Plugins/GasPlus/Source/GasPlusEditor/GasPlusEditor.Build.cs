@@ -27,5 +27,7 @@ public class GasPlusEditor : ModuleRules
                 "GasPlus" // your runtime plugin module
             }
         );
+        // Usually defined for non-shipping Editor builds already, but harmless to force:
+        PrivateDefinitions.Add("WITH_AUTOMATION_TESTS=1");
     }
 }
