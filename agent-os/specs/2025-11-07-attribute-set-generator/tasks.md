@@ -1,7 +1,7 @@
 # Task Breakdown: AttributeSet Generator
 
 ## Overview
-Total Tasks: 12
+ Total Tasks: 12
 
 ## Task List
 
