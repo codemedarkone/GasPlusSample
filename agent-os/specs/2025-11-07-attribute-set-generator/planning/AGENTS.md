@@ -282,11 +282,7 @@ Prefer concise, imperative commit subjects (e.g., `Improve ability cooldown logg
 
 ---
 
-## WSL / Codex Compatibility
-The automation stack defined here depends on the Windows host tooling (Unreal Editor, Build.bat, RunUAT, etc.) and relies on Windows paths such as `C:\Program Files\Epic Games\UE_5.6`. Enabling the `ChatGPT: Run Codex In Windows Subsystem For Linux` setting forces the Codex extension into a Linux execution context that cannot find those binaries, so you see `Codex process is not available`.
-
-Run Codex from the native Windows instance of VS Code and keep that WSL setting disabled; the workspace is not configured to map all of Unreal’s Windows-only assets into the Linux side. If you still need to use WSL for other workflows, open a separate terminal there but keep Codex running on Windows so the automation agents are available.
-
 *End of AGENTS.md for GasPlusSample / GasPlus*
+
 
 
