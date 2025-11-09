@@ -1,3 +1,4 @@
+
 <# ============================
  preflight.ps1  (run from repo root)
  - Loads .env
