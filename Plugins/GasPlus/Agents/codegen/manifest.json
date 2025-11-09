@@ -1,7 +1,12 @@
 {
   "generatorVersion": "1.0.0",
   "templateVersion": "1.0.0",
-  "elapsedSeconds": 0.0027,
+  "elapsedSeconds": 0.0077,
+  "flags": {
+    "force": false,
+    "dryRun": false,
+    "noPreserve": false
+  },
   "entries": [
     {
       "input": "/workspace/GasPlusSample/Content/Attributes/Combat.json",
@@ -44,7 +49,46 @@
         }
       ],
       "className": "UCombatAttributeSet",
-      "moduleAPI": "GASPLUSSAMPLE_API"
+      "moduleAPI": "GASPLUSSAMPLE_API",
+      "hashes": {
+        "input": "5d08a7ea311b4ed4b40ea912fe50f7f102938ee7fd7672d8c20d8d271861602d",
+        "composite": "f20725780c32aad147431dbdcb641cac0a17d882915ffe7b051ad89b17477ec9",
+        "previous": null
+      },
+      "status": {
+        "write": "update",
+        "dryRun": false,
+        "hashChanged": true,
+        "writesPerformed": true
+      },
+      "sidecar": "Plugins/GasPlus/Agents/codegen/CombatAttributeSet.generated.hash",
+      "preserveRegions": {
+        "header": {
+          "UCombatAttributeSet.PublicMembers": {
+            "status": "generated",
+            "lines": 2
+          }
+        },
+        "source": {
+          "UCombatAttributeSet.Constructor": {
+            "status": "generated",
+            "lines": 1
+          },
+          "UCombatAttributeSet.PreAttributeChange": {
+            "status": "generated",
+            "lines": 2
+          },
+          "UCombatAttributeSet.PostAttributeChange": {
+            "status": "generated",
+            "lines": 2
+          },
+          "UCombatAttributeSet.AdditionalMethods": {
+            "status": "generated",
+            "lines": 1
+          }
+        },
+        "generatedHeader": {}
+      }
     },
     {
       "input": "/workspace/GasPlusSample/Content/Attributes/Primary.json",
@@ -90,7 +134,46 @@
         }
       ],
       "className": "UPrimaryAttributeSet",
-      "moduleAPI": "GASPLUSSAMPLE_API"
+      "moduleAPI": "GASPLUSSAMPLE_API",
+      "hashes": {
+        "input": "9f9c4ba6927324fa492d7a379a4c55db0188dfc560b1a7afdb8875fcdc089aa9",
+        "composite": "37a15c83e36acb8efdf5754295d8fc3ee6c68f9ef4c0853c49e32872f8e17ce6",
+        "previous": null
+      },
+      "status": {
+        "write": "update",
+        "dryRun": false,
+        "hashChanged": true,
+        "writesPerformed": true
+      },
+      "sidecar": "Plugins/GasPlus/Agents/codegen/PrimaryAttributeSet.generated.hash",
+      "preserveRegions": {
+        "header": {
+          "UPrimaryAttributeSet.PublicMembers": {
+            "status": "generated",
+            "lines": 2
+          }
+        },
+        "source": {
+          "UPrimaryAttributeSet.Constructor": {
+            "status": "generated",
+            "lines": 1
+          },
+          "UPrimaryAttributeSet.PreAttributeChange": {
+            "status": "generated",
+            "lines": 2
+          },
+          "UPrimaryAttributeSet.PostAttributeChange": {
+            "status": "generated",
+            "lines": 2
+          },
+          "UPrimaryAttributeSet.AdditionalMethods": {
+            "status": "generated",
+            "lines": 1
+          }
+        },
+        "generatedHeader": {}
+      }
     }
   ]
 }

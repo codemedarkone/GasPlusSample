@@ -20,6 +20,10 @@ public:
     virtual void PreAttributeChange(const FGameplayAttribute& Attribute, float& NewValue) override;
     virtual void PostAttributeChange(const FGameplayAttribute& Attribute, float OldValue, float NewValue) override;
 
+    // GASPLUS-PRESERVE BEGIN UPrimaryAttributeSet.PublicMembers
+    // Add additional member declarations here.
+    // GASPLUS-PRESERVE END UPrimaryAttributeSet.PublicMembers
+
     // Attribute: Health
     // Metadata: Replicate=true, GenerateHooks=true, SkipOnRep=false, ClampMin=0.0, ClampMax=100.0
     // Current character health points.

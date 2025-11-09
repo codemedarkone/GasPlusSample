@@ -6,6 +6,9 @@
 // <Codex::Preserve End: SourceIncludes>
 
 UCombatAttributeSet::UCombatAttributeSet() = default;
+// GASPLUS-PRESERVE BEGIN UCombatAttributeSet.Constructor
+// Customize constructor defaults here.
+// GASPLUS-PRESERVE END UCombatAttributeSet.Constructor
 
 void UCombatAttributeSet::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
@@ -17,6 +20,9 @@ void UCombatAttributeSet::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& 
 void UCombatAttributeSet::PreAttributeChange(const FGameplayAttribute& Attribute, float& NewValue)
 {
     Super::PreAttributeChange(Attribute, NewValue);
+    // GASPLUS-PRESERVE BEGIN UCombatAttributeSet.PreAttributeChange
+    // Customize pre-attribute change logic here.
+    // GASPLUS-PRESERVE END UCombatAttributeSet.PreAttributeChange
     if (Attribute == GetAttackPowerAttribute())
     {
         // Metadata: Replicate=true, GenerateHooks=true, SkipOnRep=false, ClampMin=0.0
@@ -38,6 +44,9 @@ void UCombatAttributeSet::PostAttributeChange(const FGameplayAttribute& Attribut
     Super::PostAttributeChange(Attribute, OldValue, NewValue);
     UE_UNUSED(OldValue);
     UE_UNUSED(NewValue);
+    // GASPLUS-PRESERVE BEGIN UCombatAttributeSet.PostAttributeChange
+    // Customize post-attribute change logic here.
+    // GASPLUS-PRESERVE END UCombatAttributeSet.PostAttributeChange
     if (Attribute == GetAttackPowerAttribute())
     {
         // Metadata: Replicate=true, GenerateHooks=true, SkipOnRep=false, ClampMin=0.0
@@ -65,3 +74,7 @@ void UCombatAttributeSet::OnRep_CriticalRate(const FGameplayAttributeData& OldVa
     // <Codex::Preserve Begin: OnRep_CriticalRate>
     // <Codex::Preserve End: OnRep_CriticalRate>
 }
+
+// GASPLUS-PRESERVE BEGIN UCombatAttributeSet.AdditionalMethods
+// Add additional method definitions here.
+// GASPLUS-PRESERVE END UCombatAttributeSet.AdditionalMethods
