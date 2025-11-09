@@ -26,6 +26,10 @@ public class GasPlus : ModuleRules
 			new string[]
 			{
 				"Core",
+				"GameplayAbilities",
+				"GameplayTasks",
+				"GameplayTags",
+				"EnhancedInput"
 				// ... add other public dependencies that you statically link with here ...
 			}
 			);

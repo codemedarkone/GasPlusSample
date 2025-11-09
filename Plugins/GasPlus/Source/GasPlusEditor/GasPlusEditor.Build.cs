@@ -16,7 +16,10 @@ public class GasPlusEditor : ModuleRules
                 "Slate",
                 "SlateCore",
                 "Projects",
-                "GameplayTags"
+                "GameplayTasks",
+                "GameplayTags",
+                "GameplayAbilities",
+                "EnhancedInput"
 
             }
         );
