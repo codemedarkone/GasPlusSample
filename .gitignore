@@ -118,6 +118,8 @@ InstalledBuild.xml
 Plugins/GasPlus/Agents/**
 !Plugins/GasPlus/Agents/.gitignore
 !Plugins/GasPlus/Agents/**/.gitkeep
+!Plugins/GasPlus/Agents/codegen/
+!Plugins/GasPlus/Agents/codegen/**
 
 # Optional quality-of-life ignores
 Thumbs.db
