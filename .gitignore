@@ -50,6 +50,11 @@ Build/*/Binaries/
 *.cache
 *.tmp
 *.dmp
+ue_build_menu.ps1
+preflight.ps1
+.env
+*.md
+agent-os/
 
 # UHT Generated Code
 *.generated.h
