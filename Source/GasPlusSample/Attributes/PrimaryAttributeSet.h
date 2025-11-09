@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "AttributeSet.h"
 #include "AbilitySystemComponent.h"
+#include "Meta/MetaAttributes.h"
 
 #include "PrimaryAttributeSet.generated.h"
 
