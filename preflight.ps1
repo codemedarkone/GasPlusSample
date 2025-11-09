@@ -1,7 +1,7 @@
 
 <# ============================
  preflight.ps1 (run from repo root)
- - Loads .env
+ - Loads .env 
  - Verifies UE + project + plugin paths
  - Validates Codex config (agents/spec)
  - Optional: runs headless UE smoke test
