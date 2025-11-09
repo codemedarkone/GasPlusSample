@@ -52,7 +52,7 @@ Build/*/Binaries/
 *.dmp
 ue_build_menu.ps1
 preflight.ps1
-.env
+*.env
 *.md
 agent-os/
 

@@ -3,6 +3,9 @@
 #include "Net/UnrealNetwork.h"
 
 UPrimaryAttributeSet::UPrimaryAttributeSet() = default;
+// GASPLUS-PRESERVE BEGIN UPrimaryAttributeSet.Constructor
+// Customize constructor defaults here.
+// GASPLUS-PRESERVE END UPrimaryAttributeSet.Constructor
 
 void UPrimaryAttributeSet::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
@@ -15,6 +18,9 @@ void UPrimaryAttributeSet::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>&
 void UPrimaryAttributeSet::PreAttributeChange(const FGameplayAttribute& Attribute, float& NewValue)
 {
     Super::PreAttributeChange(Attribute, NewValue);
+    // GASPLUS-PRESERVE BEGIN UPrimaryAttributeSet.PreAttributeChange
+    // Customize pre-attribute change logic here.
+    // GASPLUS-PRESERVE END UPrimaryAttributeSet.PreAttributeChange
     if (Attribute == GetHealthAttribute())
     {
         // Metadata: Replicate=true, GenerateHooks=true, SkipOnRep=false, ClampMin=0.0, ClampMax=100.0
@@ -43,6 +49,9 @@ void UPrimaryAttributeSet::PostAttributeChange(const FGameplayAttribute& Attribu
     Super::PostAttributeChange(Attribute, OldValue, NewValue);
     UE_UNUSED(OldValue);
     UE_UNUSED(NewValue);
+    // GASPLUS-PRESERVE BEGIN UPrimaryAttributeSet.PostAttributeChange
+    // Customize post-attribute change logic here.
+    // GASPLUS-PRESERVE END UPrimaryAttributeSet.PostAttributeChange
     if (Attribute == GetHealthAttribute())
     {
         // Metadata: Replicate=true, GenerateHooks=true, SkipOnRep=false, ClampMin=0.0, ClampMax=100.0
@@ -70,3 +79,6 @@ void UPrimaryAttributeSet::OnRep_Mana(const FGameplayAttributeData& OldValue)
     GAMEPLAYATTRIBUTE_REPNOTIFY(UPrimaryAttributeSet, Mana, OldValue);
 }
 
+// GASPLUS-PRESERVE BEGIN UPrimaryAttributeSet.AdditionalMethods
+// Add additional method definitions here.
+// GASPLUS-PRESERVE END UPrimaryAttributeSet.AdditionalMethods
