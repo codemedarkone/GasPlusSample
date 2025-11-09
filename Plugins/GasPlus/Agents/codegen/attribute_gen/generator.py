@@ -6,6 +6,7 @@ import dataclasses
 import hashlib
 import json
 import os
+import re
 import textwrap
 import time
 from dataclasses import dataclass, field
@@ -28,6 +29,7 @@ class AttributeMetadata:
     skip_on_rep: bool = False
     clamp_min: Optional[float] = None
     clamp_max: Optional[float] = None
+    meta_attribute: Optional[str] = None
 
     @classmethod
     def from_dict(cls, data: Dict[str, object]) -> "AttributeMetadata":
@@ -53,6 +55,14 @@ class AttributeMetadata:
                 return float(value)
             raise ValueError(f"Unable to coerce float from {value!r}")
 
+        meta_attribute_raw = data.get("MetaAttribute") or data.get("metaAttribute")
+        if isinstance(meta_attribute_raw, str):
+            meta_attribute = meta_attribute_raw.strip() or None
+        elif isinstance(meta_attribute_raw, bool):
+            meta_attribute = str(meta_attribute_raw).lower()
+        else:
+            meta_attribute = None
+
         return cls(
             replicate=_as_bool(
                 data.get("Replicate", data.get("replicate")), True
@@ -65,6 +75,7 @@ class AttributeMetadata:
             ),
             clamp_min=_as_float(data.get("ClampMin", data.get("clampMin"))),
             clamp_max=_as_float(data.get("ClampMax", data.get("clampMax"))),
+            meta_attribute=meta_attribute,
         )
 
     def to_summary(self) -> Dict[str, object]:
@@ -77,6 +88,8 @@ class AttributeMetadata:
             summary["ClampMin"] = self.clamp_min
         if self.clamp_max is not None:
             summary["ClampMax"] = self.clamp_max
+        if self.meta_attribute is not None:
+            summary["MetaAttribute"] = self.meta_attribute
         return summary
 
 
@@ -108,6 +121,47 @@ class GeneratorConfig:
     manifest_path: Path = Path(DEFAULT_MANIFEST_PATH)
     log_path: Path = Path(DEFAULT_LOG_PATH)
     force: bool = False
+
+
+_PRESERVE_PATTERN = re.compile(
+    r"(?P<indent>[ \t]*)// <Codex::Preserve Begin: (?P<key>[^>]+)>\s*\n(?P<body>.*?)(?P=indent)// <Codex::Preserve End: (?P=key)>",
+    re.DOTALL,
+)
+
+
+def _collect_preserve_regions(text: str) -> Dict[str, str]:
+    regions: Dict[str, str] = {}
+    if not text:
+        return regions
+    for match in _PRESERVE_PATTERN.finditer(text):
+        key = match.group("key").strip()
+        regions[key] = match.group("body")
+    return regions
+
+
+def _merge_preserve_regions(existing_text: str, new_text: str) -> str:
+    if not existing_text:
+        return new_text
+    existing_regions = _collect_preserve_regions(existing_text)
+    if not existing_regions:
+        return new_text
+
+    def _replacer(match: re.Match[str]) -> str:
+        key = match.group("key").strip()
+        indent = match.group("indent")
+        preserved = existing_regions.get(key)
+        if preserved is None:
+            return match.group(0)
+        body = preserved
+        if body and not body.endswith("\n"):
+            body += "\n"
+        return (
+            f"{indent}// <Codex::Preserve Begin: {key}>\n"
+            f"{body}"
+            f"{indent}// <Codex::Preserve End: {key}>"
+        )
+
+    return _PRESERVE_PATTERN.sub(_replacer, new_text)
 
 
 class AttributeSetGenerator:
@@ -317,6 +371,11 @@ class AttributeSetGenerator:
         source_contents = self._render_source(asset)
         generated_header_contents = self._render_generated_header(asset)
 
+        if header_path.exists():
+            header_contents = _merge_preserve_regions(header_path.read_text(), header_contents)
+        if source_path.exists():
+            source_contents = _merge_preserve_regions(source_path.read_text(), source_contents)
+
         header_path.write_text(header_contents)
         source_path.write_text(source_contents)
         generated_header_path.write_text(generated_header_contents)
@@ -324,6 +383,18 @@ class AttributeSetGenerator:
         return header_path, source_path, generated_header_path
 
     def _render_header(self, asset: AttributeSetAsset) -> str:
+        requires_meta_registry = any(
+            attribute.metadata.meta_attribute is not None for attribute in asset.attributes
+        )
+        include_lines = [
+            '#include "CoreMinimal.h"',
+            '#include "AttributeSet.h"',
+            '#include "AbilitySystemComponent.h"',
+        ]
+        if requires_meta_registry:
+            include_lines.append('#include "GasPlusMetaAttributeRegistry.h"')
+        include_block = "\n".join(include_lines)
+
         properties = []
         onrep_decls = []
         for attribute in asset.attributes:
@@ -336,6 +407,10 @@ class AttributeSetGenerator:
                 metadata_comment_parts.append(f"ClampMin={attribute.metadata.clamp_min}")
             if attribute.metadata.clamp_max is not None:
                 metadata_comment_parts.append(f"ClampMax={attribute.metadata.clamp_max}")
+            if attribute.metadata.meta_attribute is not None:
+                metadata_comment_parts.append(
+                    f"MetaAttribute={attribute.metadata.meta_attribute}"
+                )
             metadata_comment = ", ".join(metadata_comment_parts)
 
             property_lines = [
@@ -375,32 +450,33 @@ class AttributeSetGenerator:
         if onrep_block:
             onrep_block = "\n\n" + onrep_block
 
-        header = f"""#pragma once
-
-#include \"CoreMinimal.h\"
-#include \"AttributeSet.h\"
-#include \"AbilitySystemComponent.h\"
-
-#include \"{asset.name}AttributeSet.generated.h\"
-
-UCLASS()
-class {asset.module_api} {asset.class_name} : public UAttributeSet
-{{
-    GENERATED_BODY()
-
-public:
-    {asset.class_name}();
-
-    virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
-    virtual void PreAttributeChange(const FGameplayAttribute& Attribute, float& NewValue) override;
-    virtual void PostAttributeChange(const FGameplayAttribute& Attribute, float OldValue, float NewValue) override;
-
-{properties_block}{onrep_block}
-}};
-"""
+        header = (
+            "#pragma once\n\n"
+            f"{include_block}\n"
+            "// <Codex::Preserve Begin: HeaderIncludes>\n"
+            "// <Codex::Preserve End: HeaderIncludes>\n\n"
+            f"#include \"{asset.name}AttributeSet.generated.h\"\n\n"
+            "UCLASS()\n"
+            f"class {asset.module_api} {asset.class_name} : public UAttributeSet\n"
+            "{\n"
+            "    GENERATED_BODY()\n\n"
+            "public:\n"
+            f"    {asset.class_name}();\n\n"
+            "    virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;\n"
+            "    virtual void PreAttributeChange(const FGameplayAttribute& Attribute, float& NewValue) override;\n"
+            "    virtual void PostAttributeChange(const FGameplayAttribute& Attribute, float OldValue, float NewValue) override;\n\n"
+            f"{properties_block}{onrep_block}\n"
+            "};\n"
+        )
         return header
 
     def _render_source(self, asset: AttributeSetAsset) -> str:
+        source_include_block = (
+            f"#include \"{asset.name}AttributeSet.h\"\n\n"
+            "#include \"Net/UnrealNetwork.h\"\n\n"
+            "// <Codex::Preserve Begin: SourceIncludes>\n"
+            "// <Codex::Preserve End: SourceIncludes>\n"
+        )
         replication_lines = []
         pre_blocks = []
         post_blocks = []
@@ -422,6 +498,8 @@ public:
                             void {asset.class_name}::OnRep_{attribute.name}(const FGameplayAttributeData& OldValue)
                             {{
                                 GAMEPLAYATTRIBUTE_REPNOTIFY({asset.class_name}, {attribute.name}, OldValue);
+                                // <Codex::Preserve Begin: OnRep_{attribute.name}>
+                                // <Codex::Preserve End: OnRep_{attribute.name}>
                             }}
                             """
                         ).strip()
@@ -437,6 +515,10 @@ public:
                     metadata_comment_parts.append(f"ClampMin={attribute.metadata.clamp_min}")
                 if attribute.metadata.clamp_max is not None:
                     metadata_comment_parts.append(f"ClampMax={attribute.metadata.clamp_max}")
+                if attribute.metadata.meta_attribute is not None:
+                    metadata_comment_parts.append(
+                        f"MetaAttribute={attribute.metadata.meta_attribute}"
+                    )
                 metadata_comment = ", ".join(metadata_comment_parts)
 
                 clamp_expression = "NewValue"
@@ -489,34 +571,40 @@ public:
             pre_block = "\n" + pre_block
         if post_block:
             post_block = "\n" + post_block
+        pre_block += (
+            "\n    // <Codex::Preserve Begin: PreAttributeChange_Custom>\n"
+            "    // <Codex::Preserve End: PreAttributeChange_Custom>"
+        )
+        post_block += (
+            "\n    // <Codex::Preserve Begin: PostAttributeChange_Custom>\n"
+            "    // <Codex::Preserve End: PostAttributeChange_Custom>"
+        )
 
         onrep_block = "\n\n".join(onrep_impls)
         if onrep_block:
             onrep_block = "\n\n" + onrep_block + "\n"
 
-        source = f"""#include \"{asset.name}AttributeSet.h\"
-
-#include \"Net/UnrealNetwork.h\"
-
-{asset.class_name}::{asset.class_name}() = default;
-
-void {asset.class_name}::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
-{{
-    Super::GetLifetimeReplicatedProps(OutLifetimeProps);{replication_block}
-}}
-
-void {asset.class_name}::PreAttributeChange(const FGameplayAttribute& Attribute, float& NewValue)
-{{
-    Super::PreAttributeChange(Attribute, NewValue);{pre_block}
-}}
-
-void {asset.class_name}::PostAttributeChange(const FGameplayAttribute& Attribute, float OldValue, float NewValue)
-{{
-    Super::PostAttributeChange(Attribute, OldValue, NewValue);
-    UE_UNUSED(OldValue);
-    UE_UNUSED(NewValue);{post_block}
-}}{onrep_block}
-"""
+        source = (
+            f"{source_include_block}\n"
+            f"{asset.class_name}::{asset.class_name}() = default;\n\n"
+            f"void {asset.class_name}::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const\n"
+            "{\n"
+            f"    Super::GetLifetimeReplicatedProps(OutLifetimeProps);{replication_block}\n"
+            "}\n\n"
+            f"void {asset.class_name}::PreAttributeChange(const FGameplayAttribute& Attribute, float& NewValue)\n"
+            "{\n"
+            f"    Super::PreAttributeChange(Attribute, NewValue);{pre_block}\n"
+            "}\n\n"
+            f"void {asset.class_name}::PostAttributeChange(const FGameplayAttribute& Attribute, float OldValue, float NewValue)\n"
+            "{\n"
+            "    Super::PostAttributeChange(Attribute, OldValue, NewValue);\n"
+            "    UE_UNUSED(OldValue);\n"
+            f"    UE_UNUSED(NewValue);{post_block}\n"
+            "}" 
+            f"{onrep_block}"
+        )
+        if not source.endswith("\n"):
+            source += "\n"
         return source
 
     def _render_generated_header(self, asset: AttributeSetAsset) -> str:

@@ -1,0 +1,3 @@
+AttributeSet Generator Test Summary
+Command: pytest Plugins/GasPlus/Agents/codegen/tests/test_metadata.py Plugins/GasPlus/Agents/codegen/tests/test_task_group4.py
+Result: 13 passed

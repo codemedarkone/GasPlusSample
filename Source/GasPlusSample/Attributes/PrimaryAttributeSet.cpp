@@ -2,6 +2,9 @@
 
 #include "Net/UnrealNetwork.h"
 
+// <Codex::Preserve Begin: SourceIncludes>
+// <Codex::Preserve End: SourceIncludes>
+
 UPrimaryAttributeSet::UPrimaryAttributeSet() = default;
 
 void UPrimaryAttributeSet::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -36,6 +39,8 @@ void UPrimaryAttributeSet::PreAttributeChange(const FGameplayAttribute& Attribut
         NewValue = ClampedValue;
         // TODO: Add pre-clamp logic for Stamina if additional validation is required.
     }
+    // <Codex::Preserve Begin: PreAttributeChange_Custom>
+    // <Codex::Preserve End: PreAttributeChange_Custom>
 }
 
 void UPrimaryAttributeSet::PostAttributeChange(const FGameplayAttribute& Attribute, float OldValue, float NewValue)
@@ -58,15 +63,20 @@ void UPrimaryAttributeSet::PostAttributeChange(const FGameplayAttribute& Attribu
         // Metadata: Replicate=true, GenerateHooks=true, SkipOnRep=true, ClampMin=0.0, ClampMax=150.0
         // TODO: Add post-clamp logic for Stamina (OldValue={OldValue}, NewValue={NewValue}).
     }
+    // <Codex::Preserve Begin: PostAttributeChange_Custom>
+    // <Codex::Preserve End: PostAttributeChange_Custom>
 }
 
 void UPrimaryAttributeSet::OnRep_Health(const FGameplayAttributeData& OldValue)
 {
     GAMEPLAYATTRIBUTE_REPNOTIFY(UPrimaryAttributeSet, Health, OldValue);
+    // <Codex::Preserve Begin: OnRep_Health>
+    // <Codex::Preserve End: OnRep_Health>
 }
 
 void UPrimaryAttributeSet::OnRep_Mana(const FGameplayAttributeData& OldValue)
 {
     GAMEPLAYATTRIBUTE_REPNOTIFY(UPrimaryAttributeSet, Mana, OldValue);
+    // <Codex::Preserve Begin: OnRep_Mana>
+    // <Codex::Preserve End: OnRep_Mana>
 }
-

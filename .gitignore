@@ -123,8 +123,14 @@ InstalledBuild.xml
 Plugins/GasPlus/Agents/**
 !Plugins/GasPlus/Agents/.gitignore
 !Plugins/GasPlus/Agents/**/.gitkeep
+!Plugins/GasPlus/Agents/qa/
 !Plugins/GasPlus/Agents/codegen/
 !Plugins/GasPlus/Agents/codegen/**
+!Plugins/GasPlus/Agents/validation/
+!Plugins/GasPlus/Agents/qa/manifest_sample.json
+!Plugins/GasPlus/Agents/qa/test_summary.txt
+!Plugins/GasPlus/Agents/validation/hash_log.txt
+!Plugins/GasPlus/Agents/validation/generation_log.txt
 
 # Optional quality-of-life ignores
 Thumbs.db

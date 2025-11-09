@@ -1,0 +1,5 @@
+# AttributeSet Generator Hash Log
+input: /workspace/GasPlusSample/Content/Attributes/Combat.json
+  hash: 5d08a7ea311b4ed4b40ea912fe50f7f102938ee7fd7672d8c20d8d271861602d
+input: /workspace/GasPlusSample/Content/Attributes/Primary.json
+  hash: 9f9c4ba6927324fa492d7a379a4c55db0188dfc560b1a7afdb8875fcdc089aa9
