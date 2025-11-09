@@ -2,6 +2,15 @@
 
 # Ignore all generated content from Codex automation agents
 codegen/*
+!codegen/
+!codegen/__init__.py
+!codegen/attribute_gen/
+!codegen/attribute_gen/**
+!codegen/tests/
+!codegen/tests/**
+!codegen/logs/
+!codegen/logs/attribute_gen.log
+!codegen/manifest.json
 validation/*
 editor/*
 qa/*
