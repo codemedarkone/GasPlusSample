@@ -3,8 +3,7 @@
 #include "CoreMinimal.h"
 #include "AttributeSet.h"
 #include "AbilitySystemComponent.h"
-// <Codex::Preserve Begin: HeaderIncludes>
-// <Codex::Preserve End: HeaderIncludes>
+#include "Meta/MetaAttributes.h"
 
 #include "PrimaryAttributeSet.generated.h"
 
