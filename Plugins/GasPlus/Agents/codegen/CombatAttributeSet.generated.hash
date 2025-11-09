@@ -1,0 +1,14 @@
+{
+  "asset": "Combat",
+  "className": "UCombatAttributeSet",
+  "input": "/workspace/GasPlusSample/Content/Attributes/Combat.json",
+  "inputHash": "5d08a7ea311b4ed4b40ea912fe50f7f102938ee7fd7672d8c20d8d271861602d",
+  "compositeHash": "f20725780c32aad147431dbdcb641cac0a17d882915ffe7b051ad89b17477ec9",
+  "generatorVersion": "1.0.0",
+  "templateVersion": "1.0.0",
+  "outputs": {
+    "header": "/workspace/GasPlusSample/Source/GasPlusSample/Attributes/CombatAttributeSet.h",
+    "source": "/workspace/GasPlusSample/Source/GasPlusSample/Attributes/CombatAttributeSet.cpp",
+    "generatedHeader": "/workspace/GasPlusSample/Source/GasPlusSample/Attributes/CombatAttributeSet.generated.h"
+  }
+}

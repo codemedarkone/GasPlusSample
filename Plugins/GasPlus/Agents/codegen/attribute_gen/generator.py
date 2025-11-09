@@ -6,11 +6,12 @@ import dataclasses
 import hashlib
 import json
 import os
+import re
 import textwrap
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Sequence
+from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 DEFAULT_INPUT_ROOTS = ["Content/Attributes"]
 DEFAULT_OUTPUT_ROOT = "Source/GasPlusSample/Attributes"
@@ -108,6 +109,8 @@ class GeneratorConfig:
     manifest_path: Path = Path(DEFAULT_MANIFEST_PATH)
     log_path: Path = Path(DEFAULT_LOG_PATH)
     force: bool = False
+    dry_run: bool = False
+    no_preserve: bool = False
 
 
 class AttributeSetGenerator:
@@ -157,6 +160,16 @@ class AttributeSetGenerator:
             action="store_true",
             help="Force regeneration even when hashes are unchanged.",
         )
+        parser.add_argument(
+            "--dry-run",
+            action="store_true",
+            help="Compute generation results without writing any files.",
+        )
+        parser.add_argument(
+            "--no-preserve",
+            action="store_true",
+            help="Disable preservation of // GASPLUS-PRESERVE blocks in existing outputs.",
+        )
 
         parsed = parser.parse_args(args=args)
         input_roots = AttributeSetGenerator._resolve_input_roots(parsed.inputs, parsed.config_path)
@@ -166,6 +179,8 @@ class AttributeSetGenerator:
             manifest_path=Path(parsed.manifest),
             log_path=Path(parsed.log_path),
             force=parsed.force,
+            dry_run=parsed.dry_run,
+            no_preserve=parsed.no_preserve,
         )
         return AttributeSetGenerator(config)
 
@@ -212,49 +227,53 @@ class AttributeSetGenerator:
         assets = list(self._discover_assets())
         log_lines: List[str] = []
         manifest_entries: List[Dict[str, object]] = []
+        cli_lines: List[str] = []
+
+        overrides = {
+            "force": self.config.force,
+            "dryRun": self.config.dry_run,
+            "noPreserve": self.config.no_preserve,
+        }
 
         output_root = self.config.output_root.resolve()
-        output_root.mkdir(parents=True, exist_ok=True)
-        if self.config.manifest_path.parent:
-            self.config.manifest_path.parent.mkdir(parents=True, exist_ok=True)
-        if self.config.log_path.parent:
-            self.config.log_path.parent.mkdir(parents=True, exist_ok=True)
+        if not self.config.dry_run:
+            output_root.mkdir(parents=True, exist_ok=True)
+            if self.config.manifest_path.parent:
+                self.config.manifest_path.parent.mkdir(parents=True, exist_ok=True)
+            if self.config.log_path.parent:
+                self.config.log_path.parent.mkdir(parents=True, exist_ok=True)
 
         for asset in assets:
-            header_path, source_path, generated_header_path = self._render_attribute_set(asset)
-            manifest_entries.append(
-                {
-                    "input": str(asset.source_path),
-                    "inputHash": self._hash_file(asset.source_path),
-                    "outputs": {
-                        "header": str(header_path),
-                        "source": str(source_path),
-                        "generatedHeader": str(generated_header_path),
-                    },
-                    "attributes": [
-                        {
-                            "name": attribute.name,
-                            "metadata": attribute.metadata.to_summary(),
-                            "category": attribute.category,
-                        }
-                        for attribute in asset.attributes
-                    ],
-                    "className": asset.class_name,
-                    "moduleAPI": asset.module_api,
-                }
-            )
-            log_lines.append(
-                f"Generated {asset.class_name} from {asset.source_path} -> {header_path}"
-            )
+            result = self._process_asset(asset)
+            manifest_entries.append(result["manifest"])
+            if result["log_line"]:
+                log_lines.append(result["log_line"])
+            cli_lines.append(result["cli_line"])
 
+        elapsed = round(time.time() - start_time, 4)
         manifest = {
             "generatorVersion": GENERATOR_VERSION,
             "templateVersion": TEMPLATE_VERSION,
-            "elapsedSeconds": round(time.time() - start_time, 4),
+            "elapsedSeconds": elapsed,
+            "flags": overrides,
             "entries": manifest_entries,
         }
-        self.config.manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
-        self.config.log_path.write_text("\n".join(log_lines) + ("\n" if log_lines else ""))
+
+        if not self.config.dry_run:
+            self.config.manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
+            log_output = "\n".join(log_lines)
+            if log_output:
+                log_output += "\n"
+            self.config.log_path.write_text(log_output)
+
+        for line in cli_lines:
+            print(line)
+        if not cli_lines:
+            print("No attribute sets processed.")
+        print("Validation issues: none detected.")
+        print(
+            f"Completed attribute generation in {elapsed:.4f}s (dryRun={self.config.dry_run})."
+        )
 
     def _discover_assets(self) -> Iterable[AttributeSetAsset]:
         for root in self.config.input_roots:
@@ -264,6 +283,280 @@ class AttributeSetGenerator:
                 data = json.loads(file_path.read_text())
                 asset = self._parse_asset(data, file_path)
                 yield asset
+
+    def _compute_composite_hash(
+        self, input_hash: str, asset: AttributeSetAsset
+    ) -> str:
+        digest = hashlib.sha256()
+        digest.update(GENERATOR_VERSION.encode("utf-8"))
+        digest.update(b"|")
+        digest.update(TEMPLATE_VERSION.encode("utf-8"))
+        digest.update(b"|")
+        digest.update(asset.class_name.encode("utf-8"))
+        digest.update(b"|")
+        digest.update(input_hash.encode("utf-8"))
+        return digest.hexdigest()
+
+    def _sidecar_path(self, asset: AttributeSetAsset) -> Path:
+        sidecar_root = self.config.manifest_path.parent
+        filename = f"{asset.name}AttributeSet.generated.hash"
+        return sidecar_root / filename if sidecar_root else Path(filename)
+
+    def _apply_preserve_regions(
+        self, path: Path, content: str
+    ) -> Tuple[str, Dict[str, Dict[str, object]]]:
+        pattern = re.compile(
+            r"(?P<begin>// GASPLUS-PRESERVE BEGIN (?P<key>[^\n]+?)\s*\n)"
+            r"(?P<body>.*?)"
+            r"(?P<end>// GASPLUS-PRESERVE END (?P=key))",
+            re.DOTALL,
+        )
+
+        existing_regions: Dict[str, str] = {}
+        if not self.config.no_preserve and path.exists():
+            try:
+                existing_regions = self._extract_preserve_regions(path.read_text())
+            except OSError:
+                existing_regions = {}
+
+        reports: Dict[str, Dict[str, object]] = {}
+
+        def replace(match: re.Match[str]) -> str:
+            key = match.group("key").strip()
+            body = match.group("body")
+            preserved = body
+            status = "generated"
+
+            if self.config.no_preserve and path.exists():
+                status = "ignored"
+            elif key in existing_regions:
+                preserved = existing_regions[key]
+                status = "preserved"
+
+            reports[key] = {
+                "status": status,
+                "lines": self._count_lines(preserved),
+            }
+            return f"{match.group('begin')}{preserved}{match.group('end')}"
+
+        updated_content = pattern.sub(replace, content)
+        return updated_content, reports
+
+    def _collect_existing_preserve_reports(
+        self, header_path: Path, source_path: Path, generated_header_path: Path
+    ) -> Dict[str, Dict[str, Dict[str, object]]]:
+        reports: Dict[str, Dict[str, Dict[str, object]]] = {}
+        for label, path in (
+            ("header", header_path),
+            ("source", source_path),
+            ("generatedHeader", generated_header_path),
+        ):
+            if path.exists():
+                try:
+                    regions = self._extract_preserve_regions(path.read_text())
+                except OSError:
+                    regions = {}
+                reports[label] = {
+                    key: {"status": "unchanged", "lines": self._count_lines(value)}
+                    for key, value in regions.items()
+                }
+            else:
+                reports[label] = {}
+        return reports
+
+    def _format_log_line(
+        self,
+        asset: AttributeSetAsset,
+        write_decision: str,
+        composite_hash: str,
+        hash_changed: bool,
+    ) -> str:
+        prefix = {
+            "force": "FORCED",
+            "update": "UPDATED",
+            "skip": "CACHED",
+        }.get(write_decision, write_decision.upper())
+        return (
+            f"{prefix} {asset.class_name} ({asset.source_path.name}) "
+            f"hash={composite_hash[:12]} changed={hash_changed}"
+        )
+
+    def _format_cli_line(
+        self,
+        asset: AttributeSetAsset,
+        write_decision: str,
+        composite_hash: str,
+        hash_changed: bool,
+        preserve_reports: Dict[str, Dict[str, Dict[str, object]]],
+    ) -> str:
+        prefix = {
+            "force": "FORCED",
+            "update": "UPDATED",
+            "skip": "CACHED",
+        }.get(write_decision, write_decision.upper())
+        if self.config.dry_run:
+            prefix = f"DRY-{prefix}"
+
+        preserve_bits: List[str] = []
+        for file_label, regions in preserve_reports.items():
+            if not regions:
+                continue
+            region_summaries = ",".join(
+                f"{name}:{info['status']}" for name, info in sorted(regions.items())
+            )
+            preserve_bits.append(f"{file_label}({region_summaries})")
+
+        preserve_summary = f" preserve={' | '.join(preserve_bits)}" if preserve_bits else ""
+        return (
+            f"[{prefix}] {asset.class_name} hash={composite_hash[:12]} "
+            f"changed={hash_changed}{preserve_summary}"
+        )
+
+    @staticmethod
+    def _extract_preserve_regions(content: str) -> Dict[str, str]:
+        pattern = re.compile(
+            r"// GASPLUS-PRESERVE BEGIN (?P<key>[^\n]+?)\s*\n(?P<body>.*?)// GASPLUS-PRESERVE END (?P=key)",
+            re.DOTALL,
+        )
+        regions: Dict[str, str] = {}
+        for match in pattern.finditer(content):
+            key = match.group("key").strip()
+            regions[key] = match.group("body")
+        return regions
+
+    @staticmethod
+    def _count_lines(block: str) -> int:
+        if not block:
+            return 0
+        return len(block.rstrip("\n").splitlines())
+
+    def _process_asset(self, asset: AttributeSetAsset) -> Dict[str, object]:
+        output_root = self.config.output_root.resolve()
+        header_path = output_root / f"{asset.name}AttributeSet.h"
+        source_path = output_root / f"{asset.name}AttributeSet.cpp"
+        generated_header_path = output_root / f"{asset.name}AttributeSet.generated.h"
+
+        header_template = self._render_header(asset)
+        source_template = self._render_source(asset)
+        generated_header_template = self._render_generated_header(asset)
+
+        input_hash = self._hash_file(asset.source_path)
+        composite_hash = self._compute_composite_hash(input_hash, asset)
+
+        sidecar_path = self._sidecar_path(asset)
+        previous_hash: Optional[str] = None
+        if sidecar_path.exists():
+            try:
+                previous_payload = json.loads(sidecar_path.read_text())
+                previous_hash = str(previous_payload.get("compositeHash"))
+            except (OSError, json.JSONDecodeError, ValueError):
+                previous_hash = None
+
+        files_missing = any(
+            not path.exists()
+            for path in (header_path, source_path, generated_header_path)
+        )
+        hash_changed = previous_hash != composite_hash or files_missing
+        write_decision = "update" if hash_changed else "skip"
+        if self.config.force:
+            write_decision = "force"
+
+        header_final = header_template
+        source_final = source_template
+        generated_header_final = generated_header_template
+        preserve_reports: Dict[str, Dict[str, Dict[str, object]]] = {
+            "header": {},
+            "source": {},
+            "generatedHeader": {},
+        }
+
+        if write_decision in {"update", "force"}:
+            header_final, preserve_reports["header"] = self._apply_preserve_regions(
+                header_path, header_template
+            )
+            source_final, preserve_reports["source"] = self._apply_preserve_regions(
+                source_path, source_template
+            )
+            (
+                generated_header_final,
+                preserve_reports["generatedHeader"],
+            ) = self._apply_preserve_regions(
+                generated_header_path, generated_header_template
+            )
+
+            if not self.config.dry_run:
+                header_path.write_text(header_final)
+                source_path.write_text(source_final)
+                generated_header_path.write_text(generated_header_final)
+
+                sidecar_payload = {
+                    "asset": asset.name,
+                    "className": asset.class_name,
+                    "input": str(asset.source_path),
+                    "inputHash": input_hash,
+                    "compositeHash": composite_hash,
+                    "generatorVersion": GENERATOR_VERSION,
+                    "templateVersion": TEMPLATE_VERSION,
+                    "outputs": {
+                        "header": str(header_path),
+                        "source": str(source_path),
+                        "generatedHeader": str(generated_header_path),
+                    },
+                }
+                if sidecar_path.parent:
+                    sidecar_path.parent.mkdir(parents=True, exist_ok=True)
+                sidecar_path.write_text(json.dumps(sidecar_payload, indent=2) + "\n")
+        else:
+            preserve_reports = self._collect_existing_preserve_reports(
+                header_path, source_path, generated_header_path
+            )
+
+        log_line = self._format_log_line(
+            asset, write_decision, composite_hash, hash_changed
+        )
+        cli_line = self._format_cli_line(
+            asset, write_decision, composite_hash, hash_changed, preserve_reports
+        )
+
+        manifest_entry = {
+            "input": str(asset.source_path),
+            "inputHash": input_hash,
+            "outputs": {
+                "header": str(header_path),
+                "source": str(source_path),
+                "generatedHeader": str(generated_header_path),
+            },
+            "attributes": [
+                {
+                    "name": attribute.name,
+                    "metadata": attribute.metadata.to_summary(),
+                    "category": attribute.category,
+                }
+                for attribute in asset.attributes
+            ],
+            "className": asset.class_name,
+            "moduleAPI": asset.module_api,
+            "hashes": {
+                "input": input_hash,
+                "composite": composite_hash,
+                "previous": previous_hash,
+            },
+            "status": {
+                "write": write_decision,
+                "dryRun": self.config.dry_run,
+                "hashChanged": hash_changed,
+                "writesPerformed": not self.config.dry_run
+                and write_decision in {"update", "force"},
+            },
+            "sidecar": str(sidecar_path),
+            "preserveRegions": preserve_reports,
+        }
+
+        return {
+            "manifest": manifest_entry,
+            "log_line": log_line,
+            "cli_line": cli_line,
+        }
 
     def _parse_asset(self, data: Dict[str, object], source_path: Path) -> AttributeSetAsset:
         name = str(data.get("name") or data.get("AttributeSetName") or source_path.stem)
@@ -306,22 +599,6 @@ class AttributeSetGenerator:
             attributes=attributes,
             source_path=source_path.resolve(),
         )
-
-    def _render_attribute_set(self, asset: AttributeSetAsset) -> Sequence[Path]:
-        output_root = self.config.output_root.resolve()
-        header_path = output_root / f"{asset.name}AttributeSet.h"
-        source_path = output_root / f"{asset.name}AttributeSet.cpp"
-        generated_header_path = output_root / f"{asset.name}AttributeSet.generated.h"
-
-        header_contents = self._render_header(asset)
-        source_contents = self._render_source(asset)
-        generated_header_contents = self._render_generated_header(asset)
-
-        header_path.write_text(header_contents)
-        source_path.write_text(source_contents)
-        generated_header_path.write_text(generated_header_contents)
-
-        return header_path, source_path, generated_header_path
 
     def _render_header(self, asset: AttributeSetAsset) -> str:
         properties = []
@@ -375,29 +652,43 @@ class AttributeSetGenerator:
         if onrep_block:
             onrep_block = "\n\n" + onrep_block
 
-        header = f"""#pragma once
+        preserve_block = (
+            f"    // GASPLUS-PRESERVE BEGIN {asset.class_name}.PublicMembers\n"
+            "    // Add additional member declarations here.\n"
+            f"    // GASPLUS-PRESERVE END {asset.class_name}.PublicMembers"
+        )
 
-#include \"CoreMinimal.h\"
-#include \"AttributeSet.h\"
-#include \"AbilitySystemComponent.h\"
+        class_body_parts = [
+            "public:",
+            f"    {asset.class_name}();",
+            "",
+            "    virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;",
+            "    virtual void PreAttributeChange(const FGameplayAttribute& Attribute, float& NewValue) override;",
+            "    virtual void PostAttributeChange(const FGameplayAttribute& Attribute, float OldValue, float NewValue) override;",
+            "",
+            preserve_block,
+        ]
 
-#include \"{asset.name}AttributeSet.generated.h\"
+        if properties_block:
+            class_body_parts.extend(["", properties_block])
+        if onrep_block:
+            class_body_parts.extend(["", onrep_block.strip("\n")])
 
-UCLASS()
-class {asset.module_api} {asset.class_name} : public UAttributeSet
-{{
-    GENERATED_BODY()
+        class_body = "\n".join(class_body_parts)
 
-public:
-    {asset.class_name}();
-
-    virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
-    virtual void PreAttributeChange(const FGameplayAttribute& Attribute, float& NewValue) override;
-    virtual void PostAttributeChange(const FGameplayAttribute& Attribute, float OldValue, float NewValue) override;
-
-{properties_block}{onrep_block}
-}};
-"""
+        header = (
+            f"#pragma once\n\n"
+            "#include \"CoreMinimal.h\"\n"
+            "#include \"AttributeSet.h\"\n"
+            "#include \"AbilitySystemComponent.h\"\n\n"
+            f"#include \"{asset.name}AttributeSet.generated.h\"\n\n"
+            "UCLASS()\n"
+            f"class {asset.module_api} {asset.class_name} : public UAttributeSet\n"
+            "{\n"
+            "    GENERATED_BODY()\n\n"
+            f"{class_body}\n"
+            "};\n"
+        )
         return header
 
     def _render_source(self, asset: AttributeSetAsset) -> str:
@@ -491,32 +782,64 @@ public:
             post_block = "\n" + post_block
 
         onrep_block = "\n\n".join(onrep_impls)
+
+        constructor_preserve = (
+            f"// GASPLUS-PRESERVE BEGIN {asset.class_name}.Constructor\n"
+            "// Customize constructor defaults here.\n"
+            f"// GASPLUS-PRESERVE END {asset.class_name}.Constructor"
+        )
+        pre_preserve = (
+            f"    // GASPLUS-PRESERVE BEGIN {asset.class_name}.PreAttributeChange\n"
+            "    // Customize pre-attribute change logic here.\n"
+            f"    // GASPLUS-PRESERVE END {asset.class_name}.PreAttributeChange"
+        )
+        post_preserve = (
+            f"    // GASPLUS-PRESERVE BEGIN {asset.class_name}.PostAttributeChange\n"
+            "    // Customize post-attribute change logic here.\n"
+            f"    // GASPLUS-PRESERVE END {asset.class_name}.PostAttributeChange"
+        )
+        additional_preserve = (
+            f"// GASPLUS-PRESERVE BEGIN {asset.class_name}.AdditionalMethods\n"
+            "// Add additional method definitions here.\n"
+            f"// GASPLUS-PRESERVE END {asset.class_name}.AdditionalMethods"
+        )
+
+        source_lines: List[str] = [
+            f"#include \"{asset.name}AttributeSet.h\"",
+            "",
+            "#include \"Net/UnrealNetwork.h\"",
+            "",
+            f"{asset.class_name}::{asset.class_name}() = default;",
+            constructor_preserve,
+            "",
+            f"void {asset.class_name}::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const",
+            "{",
+            "    Super::GetLifetimeReplicatedProps(OutLifetimeProps);" + replication_block,
+            "}",
+            "",
+            f"void {asset.class_name}::PreAttributeChange(const FGameplayAttribute& Attribute, float& NewValue)",
+            "{",
+            "    Super::PreAttributeChange(Attribute, NewValue);",
+            pre_preserve + pre_block,
+            "}",
+            "",
+            f"void {asset.class_name}::PostAttributeChange(const FGameplayAttribute& Attribute, float OldValue, float NewValue)",
+            "{",
+            "    Super::PostAttributeChange(Attribute, OldValue, NewValue);",
+            "    UE_UNUSED(OldValue);",
+            "    UE_UNUSED(NewValue);",
+            post_preserve + post_block,
+            "}",
+        ]
+
         if onrep_block:
-            onrep_block = "\n\n" + onrep_block + "\n"
+            source_lines.extend(["", onrep_block, ""])
+        else:
+            source_lines.append("")
 
-        source = f"""#include \"{asset.name}AttributeSet.h\"
+        source_lines.append(additional_preserve)
 
-#include \"Net/UnrealNetwork.h\"
-
-{asset.class_name}::{asset.class_name}() = default;
-
-void {asset.class_name}::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
-{{
-    Super::GetLifetimeReplicatedProps(OutLifetimeProps);{replication_block}
-}}
-
-void {asset.class_name}::PreAttributeChange(const FGameplayAttribute& Attribute, float& NewValue)
-{{
-    Super::PreAttributeChange(Attribute, NewValue);{pre_block}
-}}
-
-void {asset.class_name}::PostAttributeChange(const FGameplayAttribute& Attribute, float OldValue, float NewValue)
-{{
-    Super::PostAttributeChange(Attribute, OldValue, NewValue);
-    UE_UNUSED(OldValue);
-    UE_UNUSED(NewValue);{post_block}
-}}{onrep_block}
-"""
+        source = "\n".join(source_lines) + "\n"
         return source
 
     def _render_generated_header(self, asset: AttributeSetAsset) -> str:
