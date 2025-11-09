@@ -1,0 +1,14 @@
+{
+  "asset": "Primary",
+  "className": "UPrimaryAttributeSet",
+  "input": "/workspace/GasPlusSample/Content/Attributes/Primary.json",
+  "inputHash": "9f9c4ba6927324fa492d7a379a4c55db0188dfc560b1a7afdb8875fcdc089aa9",
+  "compositeHash": "37a15c83e36acb8efdf5754295d8fc3ee6c68f9ef4c0853c49e32872f8e17ce6",
+  "generatorVersion": "1.0.0",
+  "templateVersion": "1.0.0",
+  "outputs": {
+    "header": "/workspace/GasPlusSample/Source/GasPlusSample/Attributes/PrimaryAttributeSet.h",
+    "source": "/workspace/GasPlusSample/Source/GasPlusSample/Attributes/PrimaryAttributeSet.cpp",
+    "generatedHeader": "/workspace/GasPlusSample/Source/GasPlusSample/Attributes/PrimaryAttributeSet.generated.h"
+  }
+}
