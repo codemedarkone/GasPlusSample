@@ -1,0 +1,38 @@
+{
+  "name": "Primary",
+  "className": "UPrimaryAttributeSet",
+  "moduleApi": "GASPLUSSAMPLE_API",
+  "attributes": [
+    {
+      "name": "Health",
+      "category": "Vitals",
+      "comment": "Current character health points.",
+      "metadata": {
+        "Replicate": true,
+        "ClampMin": 0,
+        "ClampMax": 100
+      }
+    },
+    {
+      "name": "Mana",
+      "category": "Vitals",
+      "comment": "Primary resource for abilities.",
+      "metadata": {
+        "Replicate": true,
+        "ClampMin": 0,
+        "ClampMax": 250
+      }
+    },
+    {
+      "name": "Stamina",
+      "category": "Vitals",
+      "comment": "Short burst resource for sprinting.",
+      "metadata": {
+        "Replicate": true,
+        "SkipOnRep": true,
+        "ClampMin": 0,
+        "ClampMax": 150
+      }
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "name": "Combat",
+  "className": "UCombatAttributeSet",
+  "moduleApi": "GASPLUSSAMPLE_API",
+  "attributes": [
+    {
+      "name": "AttackPower",
+      "category": "Combat",
+      "comment": "Scales outgoing damage.",
+      "metadata": {
+        "Replicate": true,
+        "ClampMin": 0
+      }
+    },
+    {
+      "name": "DefensePower",
+      "category": "Combat",
+      "comment": "Reduces incoming damage.",
+      "metadata": {
+        "Replicate": false,
+        "GenerateHooks": true
+      }
+    },
+    {
+      "name": "CriticalRate",
+      "category": "Combat",
+      "comment": "Chance to critical hit.",
+      "metadata": {
+        "Replicate": true,
+        "GenerateHooks": false,
+        "ClampMin": 0,
+        "ClampMax": 1
+      }
+    }
+  ]
+}
