@@ -12,8 +12,14 @@ codegen/*
 !codegen/logs/attribute_gen.log
 !codegen/manifest.json
 validation/*
+!validation/
+!validation/hash_log.txt
+!validation/generation_log.txt
 editor/*
 qa/*
+!qa/
+!qa/manifest_sample.json
+!qa/test_summary.txt
 docs/*
 
 # But keep directory structure

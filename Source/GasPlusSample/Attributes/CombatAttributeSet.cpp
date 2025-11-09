@@ -2,6 +2,9 @@
 
 #include "Net/UnrealNetwork.h"
 
+// <Codex::Preserve Begin: SourceIncludes>
+// <Codex::Preserve End: SourceIncludes>
+
 UCombatAttributeSet::UCombatAttributeSet() = default;
 
 void UCombatAttributeSet::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -26,6 +29,8 @@ void UCombatAttributeSet::PreAttributeChange(const FGameplayAttribute& Attribute
         // Metadata: Replicate=false, GenerateHooks=true, SkipOnRep=false
         // TODO: Add pre-clamp logic for DefensePower if additional validation is required.
     }
+    // <Codex::Preserve Begin: PreAttributeChange_Custom>
+    // <Codex::Preserve End: PreAttributeChange_Custom>
 }
 
 void UCombatAttributeSet::PostAttributeChange(const FGameplayAttribute& Attribute, float OldValue, float NewValue)
@@ -43,15 +48,20 @@ void UCombatAttributeSet::PostAttributeChange(const FGameplayAttribute& Attribut
         // Metadata: Replicate=false, GenerateHooks=true, SkipOnRep=false
         // TODO: Add post-clamp logic for DefensePower (OldValue={OldValue}, NewValue={NewValue}).
     }
+    // <Codex::Preserve Begin: PostAttributeChange_Custom>
+    // <Codex::Preserve End: PostAttributeChange_Custom>
 }
 
 void UCombatAttributeSet::OnRep_AttackPower(const FGameplayAttributeData& OldValue)
 {
     GAMEPLAYATTRIBUTE_REPNOTIFY(UCombatAttributeSet, AttackPower, OldValue);
+    // <Codex::Preserve Begin: OnRep_AttackPower>
+    // <Codex::Preserve End: OnRep_AttackPower>
 }
 
 void UCombatAttributeSet::OnRep_CriticalRate(const FGameplayAttributeData& OldValue)
 {
     GAMEPLAYATTRIBUTE_REPNOTIFY(UCombatAttributeSet, CriticalRate, OldValue);
+    // <Codex::Preserve Begin: OnRep_CriticalRate>
+    // <Codex::Preserve End: OnRep_CriticalRate>
 }
-
