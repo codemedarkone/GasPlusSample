@@ -1,0 +1,96 @@
+{
+  "generatorVersion": "1.0.0",
+  "templateVersion": "1.0.0",
+  "elapsedSeconds": 0.0027,
+  "entries": [
+    {
+      "input": "/workspace/GasPlusSample/Content/Attributes/Combat.json",
+      "inputHash": "5d08a7ea311b4ed4b40ea912fe50f7f102938ee7fd7672d8c20d8d271861602d",
+      "outputs": {
+        "header": "/workspace/GasPlusSample/Source/GasPlusSample/Attributes/CombatAttributeSet.h",
+        "source": "/workspace/GasPlusSample/Source/GasPlusSample/Attributes/CombatAttributeSet.cpp",
+        "generatedHeader": "/workspace/GasPlusSample/Source/GasPlusSample/Attributes/CombatAttributeSet.generated.h"
+      },
+      "attributes": [
+        {
+          "name": "AttackPower",
+          "metadata": {
+            "Replicate": true,
+            "GenerateHooks": true,
+            "SkipOnRep": false,
+            "ClampMin": 0.0
+          },
+          "category": "Combat"
+        },
+        {
+          "name": "DefensePower",
+          "metadata": {
+            "Replicate": false,
+            "GenerateHooks": true,
+            "SkipOnRep": false
+          },
+          "category": "Combat"
+        },
+        {
+          "name": "CriticalRate",
+          "metadata": {
+            "Replicate": true,
+            "GenerateHooks": false,
+            "SkipOnRep": false,
+            "ClampMin": 0.0,
+            "ClampMax": 1.0
+          },
+          "category": "Combat"
+        }
+      ],
+      "className": "UCombatAttributeSet",
+      "moduleAPI": "GASPLUSSAMPLE_API"
+    },
+    {
+      "input": "/workspace/GasPlusSample/Content/Attributes/Primary.json",
+      "inputHash": "9f9c4ba6927324fa492d7a379a4c55db0188dfc560b1a7afdb8875fcdc089aa9",
+      "outputs": {
+        "header": "/workspace/GasPlusSample/Source/GasPlusSample/Attributes/PrimaryAttributeSet.h",
+        "source": "/workspace/GasPlusSample/Source/GasPlusSample/Attributes/PrimaryAttributeSet.cpp",
+        "generatedHeader": "/workspace/GasPlusSample/Source/GasPlusSample/Attributes/PrimaryAttributeSet.generated.h"
+      },
+      "attributes": [
+        {
+          "name": "Health",
+          "metadata": {
+            "Replicate": true,
+            "GenerateHooks": true,
+            "SkipOnRep": false,
+            "ClampMin": 0.0,
+            "ClampMax": 100.0
+          },
+          "category": "Vitals"
+        },
+        {
+          "name": "Mana",
+          "metadata": {
+            "Replicate": true,
+            "GenerateHooks": true,
+            "SkipOnRep": false,
+            "ClampMin": 0.0,
+            "ClampMax": 250.0
+          },
+          "category": "Vitals"
+        },
+        {
+          "name": "Stamina",
+          "metadata": {
+            "Replicate": true,
+            "GenerateHooks": true,
+            "SkipOnRep": true,
+            "ClampMin": 0.0,
+            "ClampMax": 150.0
+          },
+          "category": "Vitals"
+        }
+      ],
+      "className": "UPrimaryAttributeSet",
+      "moduleAPI": "GASPLUSSAMPLE_API"
+    }
+  ]
+}

@@ -1,5 +1,3 @@
-import json
-import re
 import shutil
 import subprocess
 import sys
@@ -11,51 +9,11 @@ if str(ROOT) not in sys.path:
 
 import pytest
 
-from Plugins.GasPlus.Agents.codegen.attribute_gen import (
-    AttributeSetGenerator,
-    GeneratorConfig,
-)
-
-
-def _write_asset(tmp_path: Path, name: str, attributes):
-    content_dir = tmp_path / "Content" / "Attributes"
-    content_dir.mkdir(parents=True, exist_ok=True)
-    asset_path = content_dir / f"{name}.json"
-    payload = {
-        "name": name,
-        "className": f"U{name}AttributeSet",
-        "moduleApi": "GASPLUSSAMPLE_API",
-        "attributes": attributes,
-    }
-    asset_path.write_text(json.dumps(payload, indent=2))
-    return asset_path
-
-
-def _run_generator(tmp_path: Path):
-    output_root = tmp_path / "Source" / "GasPlusSample" / "Attributes"
-    manifest_path = tmp_path / "Plugins" / "GasPlus" / "Agents" / "codegen" / "manifest.json"
-    log_path = tmp_path / "Plugins" / "GasPlus" / "Agents" / "codegen" / "logs" / "attribute_gen.log"
-    config = GeneratorConfig(
-        input_roots=[tmp_path / "Content" / "Attributes"],
-        output_root=output_root,
-        manifest_path=manifest_path,
-        log_path=log_path,
-        force=True,
-    )
-    generator = AttributeSetGenerator(config)
-    generator.run()
-    return output_root
-
-
-def _extract_property_spec(header: str, attribute_name: str) -> str:
-    pattern = rf"UPROPERTY\(([^)]*)\)\s+FGameplayAttributeData {attribute_name};"
-    match = re.search(pattern, header, re.MULTILINE | re.DOTALL)
-    assert match, f"Property {attribute_name} not found in header"
-    return match.group(1)
+from . import utils
 
 
 def test_replicated_attribute_emits_onrep(tmp_path):
-    _write_asset(
+    utils.write_asset(
         tmp_path,
         "Primary",
         [
@@ -67,7 +25,7 @@ def test_replicated_attribute_emits_onrep(tmp_path):
             }
         ],
     )
-    output_root = _run_generator(tmp_path)
+    output_root = utils.run_generator(tmp_path)
     header = (output_root / "PrimaryAttributeSet.h").read_text()
     source = (output_root / "PrimaryAttributeSet.cpp").read_text()
 
@@ -78,7 +36,7 @@ def test_replicated_attribute_emits_onrep(tmp_path):
 
 
 def test_skip_replication_metadata(tmp_path):
-    _write_asset(
+    utils.write_asset(
         tmp_path,
         "Secondary",
         [
@@ -91,18 +49,18 @@ def test_skip_replication_metadata(tmp_path):
             }
         ],
     )
-    output_root = _run_generator(tmp_path)
+    output_root = utils.run_generator(tmp_path)
     header = (output_root / "SecondaryAttributeSet.h").read_text()
     source = (output_root / "SecondaryAttributeSet.cpp").read_text()
 
-    spec = _extract_property_spec(header, "Mana")
+    spec = utils.extract_property_spec(header, "Mana")
     assert "Replicated" not in spec
     assert "OnRep_Mana" not in header
     assert "DOREPLIFETIME" not in source
 
 
 def test_skip_onrep_metadata(tmp_path):
-    _write_asset(
+    utils.write_asset(
         tmp_path,
         "Tertiary",
         [
@@ -115,11 +73,11 @@ def test_skip_onrep_metadata(tmp_path):
             }
         ],
     )
-    output_root = _run_generator(tmp_path)
+    output_root = utils.run_generator(tmp_path)
     header = (output_root / "TertiaryAttributeSet.h").read_text()
     source = (output_root / "TertiaryAttributeSet.cpp").read_text()
 
-    spec = _extract_property_spec(header, "Stamina")
+    spec = utils.extract_property_spec(header, "Stamina")
     assert "ReplicatedUsing=OnRep_Stamina" not in spec
     assert "Replicated" in spec
     assert "OnRep_Stamina" not in header
@@ -128,7 +86,7 @@ def test_skip_onrep_metadata(tmp_path):
 
 
 def test_clamp_metadata_generates_clamp_code(tmp_path):
-    _write_asset(
+    utils.write_asset(
         tmp_path,
         "Quaternary",
         [
@@ -141,14 +99,14 @@ def test_clamp_metadata_generates_clamp_code(tmp_path):
             }
         ],
     )
-    output_root = _run_generator(tmp_path)
+    output_root = utils.run_generator(tmp_path)
     source = (output_root / "QuaternaryAttributeSet.cpp").read_text()
 
     assert "FMath::Clamp(NewValue, 0.0, 100.0)" in source
 
 
 def test_generate_hooks_false_omits_pre_post_blocks(tmp_path):
-    _write_asset(
+    utils.write_asset(
         tmp_path,
         "Quinary",
         [
@@ -160,7 +118,7 @@ def test_generate_hooks_false_omits_pre_post_blocks(tmp_path):
             }
         ],
     )
-    output_root = _run_generator(tmp_path)
+    output_root = utils.run_generator(tmp_path)
     source = (output_root / "QuinaryAttributeSet.cpp").read_text()
 
     assert "GetShieldAttribute" not in source
@@ -168,7 +126,7 @@ def test_generate_hooks_false_omits_pre_post_blocks(tmp_path):
 
 @pytest.mark.skipif(shutil.which("g++") is None, reason="g++ compiler is required")
 def test_generated_code_compiles(tmp_path):
-    _write_asset(
+    utils.write_asset(
         tmp_path,
         "CompileCheck",
         [
@@ -181,7 +139,7 @@ def test_generated_code_compiles(tmp_path):
             }
         ],
     )
-    output_root = _run_generator(tmp_path)
+    output_root = utils.run_generator(tmp_path)
     header_path = output_root / "CompileCheckAttributeSet.h"
     source_path = output_root / "CompileCheckAttributeSet.cpp"
     generated_header_path = output_root / "CompileCheckAttributeSet.generated.h"
@@ -256,11 +214,14 @@ def test_generated_code_compiles(tmp_path):
             "-std=c++17",
             "-c",
             str(test_cpp),
+            "-o",
+            str(compile_dir / "test.o"),
             *include_flags,
         ],
         capture_output=True,
         text=True,
         check=False,
+        cwd=str(compile_dir),
     )
 
     assert result.returncode == 0, result.stderr

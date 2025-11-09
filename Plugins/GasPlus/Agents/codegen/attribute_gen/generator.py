@@ -29,6 +29,7 @@ class AttributeMetadata:
     skip_on_rep: bool = False
     clamp_min: Optional[float] = None
     clamp_max: Optional[float] = None
+    meta_attribute: Optional[str] = None
 
     @classmethod
     def from_dict(cls, data: Dict[str, object]) -> "AttributeMetadata":
@@ -54,6 +55,14 @@ class AttributeMetadata:
                 return float(value)
             raise ValueError(f"Unable to coerce float from {value!r}")
 
+        meta_attribute_raw = data.get("MetaAttribute") or data.get("metaAttribute")
+        if isinstance(meta_attribute_raw, str):
+            meta_attribute = meta_attribute_raw.strip() or None
+        elif isinstance(meta_attribute_raw, bool):
+            meta_attribute = str(meta_attribute_raw).lower()
+        else:
+            meta_attribute = None
+
         return cls(
             replicate=_as_bool(
                 data.get("Replicate", data.get("replicate")), True
@@ -66,6 +75,7 @@ class AttributeMetadata:
             ),
             clamp_min=_as_float(data.get("ClampMin", data.get("clampMin"))),
             clamp_max=_as_float(data.get("ClampMax", data.get("clampMax"))),
+            meta_attribute=meta_attribute,
         )
 
     def to_summary(self) -> Dict[str, object]:
@@ -78,6 +88,8 @@ class AttributeMetadata:
             summary["ClampMin"] = self.clamp_min
         if self.clamp_max is not None:
             summary["ClampMax"] = self.clamp_max
+        if self.meta_attribute is not None:
+            summary["MetaAttribute"] = self.meta_attribute
         return summary
 
 
@@ -111,6 +123,47 @@ class GeneratorConfig:
     force: bool = False
     dry_run: bool = False
     no_preserve: bool = False
+
+
+_PRESERVE_PATTERN = re.compile(
+    r"(?P<indent>[ \t]*)// <Codex::Preserve Begin: (?P<key>[^>]+)>\s*\n(?P<body>.*?)(?P=indent)// <Codex::Preserve End: (?P=key)>",
+    re.DOTALL,
+)
+
+
+def _collect_preserve_regions(text: str) -> Dict[str, str]:
+    regions: Dict[str, str] = {}
+    if not text:
+        return regions
+    for match in _PRESERVE_PATTERN.finditer(text):
+        key = match.group("key").strip()
+        regions[key] = match.group("body")
+    return regions
+
+
+def _merge_preserve_regions(existing_text: str, new_text: str) -> str:
+    if not existing_text:
+        return new_text
+    existing_regions = _collect_preserve_regions(existing_text)
+    if not existing_regions:
+        return new_text
+
+    def _replacer(match: re.Match[str]) -> str:
+        key = match.group("key").strip()
+        indent = match.group("indent")
+        preserved = existing_regions.get(key)
+        if preserved is None:
+            return match.group(0)
+        body = preserved
+        if body and not body.endswith("\n"):
+            body += "\n"
+        return (
+            f"{indent}// <Codex::Preserve Begin: {key}>\n"
+            f"{body}"
+            f"{indent}// <Codex::Preserve End: {key}>"
+        )
+
+    return _PRESERVE_PATTERN.sub(_replacer, new_text)
 
 
 class AttributeSetGenerator:
@@ -603,6 +656,19 @@ class AttributeSetGenerator:
         )
 
     def _render_header(self, asset: AttributeSetAsset) -> str:
+        requires_meta_registry = any(
+            attribute.metadata.meta_attribute is not None for attribute in asset.attributes
+        )
+        include_lines = [
+            '#include "CoreMinimal.h"',
+            '#include "AttributeSet.h"',
+            '#include "AbilitySystemComponent.h"',
+            '#include "Meta/MetaAttributes.h"',
+        ]
+        if requires_meta_registry:
+            include_lines.append('#include "GasPlusMetaAttributeRegistry.h"')
+        include_block = "\n".join(include_lines)
+
         properties = []
         onrep_decls = []
         for attribute in asset.attributes:
@@ -615,6 +681,10 @@ class AttributeSetGenerator:
                 metadata_comment_parts.append(f"ClampMin={attribute.metadata.clamp_min}")
             if attribute.metadata.clamp_max is not None:
                 metadata_comment_parts.append(f"ClampMax={attribute.metadata.clamp_max}")
+            if attribute.metadata.meta_attribute is not None:
+                metadata_comment_parts.append(
+                    f"MetaAttribute={attribute.metadata.meta_attribute}"
+                )
             metadata_comment = ", ".join(metadata_comment_parts)
 
             property_lines = [
@@ -679,11 +749,10 @@ class AttributeSetGenerator:
         class_body = "\n".join(class_body_parts)
 
         header = (
-            f"#pragma once\n\n"
-            "#include \"CoreMinimal.h\"\n"
-            "#include \"AttributeSet.h\"\n"
-            "#include \"AbilitySystemComponent.h\"\n"
-            "#include \"Meta/MetaAttributes.h\"\n\n"
+            "#pragma once\n\n"
+            f"{include_block}\n"
+            "// <Codex::Preserve Begin: HeaderIncludes>\n"
+            "// <Codex::Preserve End: HeaderIncludes>\n\n"
             f"#include \"{asset.name}AttributeSet.generated.h\"\n\n"
             "UCLASS()\n"
             f"class {asset.module_api} {asset.class_name} : public UAttributeSet\n"
@@ -695,6 +764,12 @@ class AttributeSetGenerator:
         return header
 
     def _render_source(self, asset: AttributeSetAsset) -> str:
+        source_include_block = (
+            f"#include \"{asset.name}AttributeSet.h\"\n\n"
+            "#include \"Net/UnrealNetwork.h\"\n\n"
+            "// <Codex::Preserve Begin: SourceIncludes>\n"
+            "// <Codex::Preserve End: SourceIncludes>\n"
+        )
         replication_lines = []
         pre_blocks = []
         post_blocks = []
@@ -716,6 +791,8 @@ class AttributeSetGenerator:
                             void {asset.class_name}::OnRep_{attribute.name}(const FGameplayAttributeData& OldValue)
                             {{
                                 GAMEPLAYATTRIBUTE_REPNOTIFY({asset.class_name}, {attribute.name}, OldValue);
+                                // <Codex::Preserve Begin: OnRep_{attribute.name}>
+                                // <Codex::Preserve End: OnRep_{attribute.name}>
                             }}
                             """
                         ).strip()
@@ -731,6 +808,10 @@ class AttributeSetGenerator:
                     metadata_comment_parts.append(f"ClampMin={attribute.metadata.clamp_min}")
                 if attribute.metadata.clamp_max is not None:
                     metadata_comment_parts.append(f"ClampMax={attribute.metadata.clamp_max}")
+                if attribute.metadata.meta_attribute is not None:
+                    metadata_comment_parts.append(
+                        f"MetaAttribute={attribute.metadata.meta_attribute}"
+                    )
                 metadata_comment = ", ".join(metadata_comment_parts)
 
                 clamp_expression = "NewValue"
@@ -783,6 +864,14 @@ class AttributeSetGenerator:
             pre_block = "\n" + pre_block
         if post_block:
             post_block = "\n" + post_block
+        pre_block += (
+            "\n    // <Codex::Preserve Begin: PreAttributeChange_Custom>\n"
+            "    // <Codex::Preserve End: PreAttributeChange_Custom>"
+        )
+        post_block += (
+            "\n    // <Codex::Preserve Begin: PostAttributeChange_Custom>\n"
+            "    // <Codex::Preserve End: PostAttributeChange_Custom>"
+        )
 
         onrep_block = "\n\n".join(onrep_impls)
 
@@ -808,9 +897,7 @@ class AttributeSetGenerator:
         )
 
         source_lines: List[str] = [
-            f"#include \"{asset.name}AttributeSet.h\"",
-            "",
-            "#include \"Net/UnrealNetwork.h\"",
+            source_include_block,
             "",
             f"{asset.class_name}::{asset.class_name}() = default;",
             constructor_preserve,
