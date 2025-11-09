@@ -220,6 +220,8 @@ class AttributeSetGenerator:
         if self.config.log_path.parent:
             self.config.log_path.parent.mkdir(parents=True, exist_ok=True)
 
+        self._ensure_meta_registry(output_root)
+
         for asset in assets:
             header_path, source_path, generated_header_path = self._render_attribute_set(asset)
             manifest_entries.append(
@@ -380,6 +382,7 @@ class AttributeSetGenerator:
 #include \"CoreMinimal.h\"
 #include \"AttributeSet.h\"
 #include \"AbilitySystemComponent.h\"
+#include \"Meta/MetaAttributes.h\"
 
 #include \"{asset.name}AttributeSet.generated.h\"
 
@@ -518,6 +521,324 @@ void {asset.class_name}::PostAttributeChange(const FGameplayAttribute& Attribute
 }}{onrep_block}
 """
         return source
+
+    def _ensure_meta_registry(self, output_root: Path) -> None:
+        meta_root = output_root / "Meta"
+        meta_root.mkdir(parents=True, exist_ok=True)
+
+        header_path = meta_root / "MetaAttributes.h"
+        source_path = meta_root / "MetaAttributes.cpp"
+
+        header_contents = self._render_meta_registry_header()
+        source_contents = self._render_meta_registry_source()
+
+        self._write_if_changed(header_path, header_contents)
+        self._write_if_changed(source_path, source_contents)
+
+    def _render_meta_registry_header(self) -> str:
+        return textwrap.dedent(
+            """\
+            #pragma once
+
+            #include "CoreMinimal.h"
+
+            #if __has_include("UObject/NameTypes.h")
+            #include "UObject/NameTypes.h"
+            #include "Containers/UnrealString.h"
+            #endif
+
+            #if __has_include("Containers/Map.h")
+            #include "Containers/Map.h"
+            #endif
+
+            #if !__has_include("UObject/NameTypes.h")
+            #include <string>
+            #endif
+
+            #if !__has_include("Containers/Map.h")
+            #include <map>
+            #include <stdexcept>
+            #endif
+
+            #ifndef TEXT
+            #define TEXT(x) x
+            #endif
+
+            namespace GasPlusSample::Attributes::Meta
+            {
+            #if __has_include("UObject/NameTypes.h")
+                using FMetaRegistryName = FName;
+                using FMetaRegistryString = FString;
+            #else
+                struct FMetaRegistryName
+                {
+                    FMetaRegistryName() = default;
+
+                    explicit FMetaRegistryName(const char* InName)
+                        : Value(InName ? InName : "")
+                    {
+                    }
+
+                    bool IsNone() const
+                    {
+                        return Value.empty();
+                    }
+
+                    bool operator==(const FMetaRegistryName& Other) const
+                    {
+                        return Value == Other.Value;
+                    }
+
+                    bool operator!=(const FMetaRegistryName& Other) const
+                    {
+                        return !(*this == Other);
+                    }
+
+                    std::string Value;
+                };
+
+                inline bool operator<(const FMetaRegistryName& Lhs, const FMetaRegistryName& Rhs)
+                {
+                    return Lhs.Value < Rhs.Value;
+                }
+
+                using FMetaRegistryString = std::string;
+            #endif
+
+            #if __has_include("Containers/Map.h")
+                template <typename KeyType, typename ValueType>
+                using TMetaRegistryMap = TMap<KeyType, ValueType>;
+            #else
+                template <typename KeyType, typename ValueType>
+                class TMetaRegistryMap
+                {
+                public:
+                    bool Contains(const KeyType& Key) const
+                    {
+                        return Storage.find(Key) != Storage.end();
+                    }
+
+                    void Add(const KeyType& Key, const ValueType& Value)
+                    {
+                        Storage[Key] = Value;
+                    }
+
+                    const ValueType* Find(const KeyType& Key) const
+                    {
+                        auto It = Storage.find(Key);
+                        if (It == Storage.end())
+                        {
+                            return nullptr;
+                        }
+                        return &It->second;
+                    }
+
+                    ValueType* Find(const KeyType& Key)
+                    {
+                        auto It = Storage.find(Key);
+                        if (It == Storage.end())
+                        {
+                            return nullptr;
+                        }
+                        return &It->second;
+                    }
+
+                    const ValueType& FindChecked(const KeyType& Key) const
+                    {
+                        auto It = Storage.find(Key);
+                        if (It == Storage.end())
+                        {
+                            throw std::out_of_range("Key not found in TMetaRegistryMap");
+                        }
+                        return It->second;
+                    }
+
+                private:
+                    std::map<KeyType, ValueType> Storage;
+                };
+            #endif
+
+                struct GASPLUSSAMPLE_API FMetaAttributeDefinition
+                {
+                    FMetaAttributeDefinition() = default;
+
+                    FMetaAttributeDefinition(
+                        const FMetaRegistryName& InRegistryName,
+                        const FMetaRegistryName& InBackingAttributeName,
+                        const FMetaRegistryString& InDescription);
+
+                    FMetaRegistryName RegistryName;
+                    FMetaRegistryName BackingAttributeName;
+                    FMetaRegistryString Description;
+                };
+
+                class GASPLUSSAMPLE_API FMetaAttributesRegistry
+                {
+                public:
+                    static const FMetaAttributesRegistry& Get();
+                    static void RegisterEditorExtension(const FMetaAttributeDefinition& Definition);
+
+                    const FMetaAttributeDefinition& GetDamage() const;
+                    const FMetaAttributeDefinition& GetHeal() const;
+                    const FMetaAttributeDefinition& GetShieldDelta() const;
+
+                    const TMetaRegistryMap<FMetaRegistryName, FMetaAttributeDefinition>& GetDefinitions() const;
+                    const FMetaAttributeDefinition* FindDefinition(const FMetaRegistryName& RegistryName) const;
+
+                private:
+                    FMetaAttributesRegistry();
+                    void Register(const FMetaAttributeDefinition& Definition);
+
+                    static const FMetaRegistryName DamageKey;
+                    static const FMetaRegistryName HealKey;
+                    static const FMetaRegistryName ShieldDeltaKey;
+
+                    TMetaRegistryMap<FMetaRegistryName, FMetaAttributeDefinition> Definitions;
+                };
+            }
+            """
+        ).strip() + "\n"
+
+    def _render_meta_registry_source(self) -> str:
+        return textwrap.dedent(
+            """\
+            #include "Meta/MetaAttributes.h"
+
+            #if __has_include("HAL/CriticalSection.h")
+            #include "HAL/CriticalSection.h"
+            #include "Misc/ScopeLock.h"
+            #else
+            #include <mutex>
+            #endif
+
+            namespace GasPlusSample::Attributes::Meta
+            {
+            #if !__has_include("HAL/CriticalSection.h")
+                class FCriticalSection
+                {
+                public:
+                    void Lock()
+                    {
+                        Mutex.lock();
+                    }
+
+                    void Unlock()
+                    {
+                        Mutex.unlock();
+                    }
+
+                private:
+                    std::mutex Mutex;
+                };
+
+                class FScopeLock
+                {
+                public:
+                    explicit FScopeLock(FCriticalSection* InCriticalSection)
+                        : CriticalSection(InCriticalSection)
+                    {
+                        if (CriticalSection)
+                        {
+                            CriticalSection->Lock();
+                        }
+                    }
+
+                    ~FScopeLock()
+                    {
+                        if (CriticalSection)
+                        {
+                            CriticalSection->Unlock();
+                        }
+                    }
+
+                private:
+                    FCriticalSection* CriticalSection;
+                };
+            #endif
+
+                namespace
+                {
+                    FCriticalSection GMetaAttributesRegistryMutex;
+                }
+
+                const FMetaRegistryName FMetaAttributesRegistry::DamageKey(TEXT("Damage"));
+                const FMetaRegistryName FMetaAttributesRegistry::HealKey(TEXT("Heal"));
+                const FMetaRegistryName FMetaAttributesRegistry::ShieldDeltaKey(TEXT("ShieldDelta"));
+
+                FMetaAttributeDefinition::FMetaAttributeDefinition(
+                    const FMetaRegistryName& InRegistryName,
+                    const FMetaRegistryName& InBackingAttributeName,
+                    const FMetaRegistryString& InDescription)
+                    : RegistryName(InRegistryName)
+                    , BackingAttributeName(InBackingAttributeName)
+                    , Description(InDescription)
+                {
+                }
+
+                const FMetaAttributesRegistry& FMetaAttributesRegistry::Get()
+                {
+                    static FMetaAttributesRegistry Instance;
+                    return Instance;
+                }
+
+                void FMetaAttributesRegistry::RegisterEditorExtension(const FMetaAttributeDefinition& Definition)
+                {
+                    FScopeLock Lock(&GMetaAttributesRegistryMutex);
+                    FMetaAttributesRegistry& Registry = const_cast<FMetaAttributesRegistry&>(Get());
+                    Registry.Register(Definition);
+                }
+
+                FMetaAttributesRegistry::FMetaAttributesRegistry()
+                {
+                    Register(FMetaAttributeDefinition(DamageKey, DamageKey, TEXT("Aggregates outgoing damage modifications before final application.")));
+                    Register(FMetaAttributeDefinition(HealKey, HealKey, TEXT("Aggregates incoming healing before it is applied to core attributes.")));
+                    Register(FMetaAttributeDefinition(ShieldDeltaKey, ShieldDeltaKey, TEXT("Captures shield-specific adjustments that may bypass health values.")));
+                }
+
+                void FMetaAttributesRegistry::Register(const FMetaAttributeDefinition& Definition)
+                {
+                    if (Definition.RegistryName.IsNone() || Definitions.Contains(Definition.RegistryName))
+                    {
+                        return;
+                    }
+
+                    Definitions.Add(Definition.RegistryName, Definition);
+                }
+
+                const TMetaRegistryMap<FMetaRegistryName, FMetaAttributeDefinition>& FMetaAttributesRegistry::GetDefinitions() const
+                {
+                    return Definitions;
+                }
+
+                const FMetaAttributeDefinition* FMetaAttributesRegistry::FindDefinition(const FMetaRegistryName& RegistryName) const
+                {
+                    return Definitions.Find(RegistryName);
+                }
+
+                const FMetaAttributeDefinition& FMetaAttributesRegistry::GetDamage() const
+                {
+                    return Definitions.FindChecked(DamageKey);
+                }
+
+                const FMetaAttributeDefinition& FMetaAttributesRegistry::GetHeal() const
+                {
+                    return Definitions.FindChecked(HealKey);
+                }
+
+                const FMetaAttributeDefinition& FMetaAttributesRegistry::GetShieldDelta() const
+                {
+                    return Definitions.FindChecked(ShieldDeltaKey);
+                }
+            }
+            """
+        ).strip() + "\n"
+
+    @staticmethod
+    def _write_if_changed(path: Path, contents: str) -> None:
+        normalized = contents if contents.endswith("\n") else contents + "\n"
+        if path.exists() and path.read_text() == normalized:
+            return
+        path.write_text(normalized)
 
     def _render_generated_header(self, asset: AttributeSetAsset) -> str:
         return textwrap.dedent(
