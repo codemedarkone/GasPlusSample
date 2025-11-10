@@ -29,7 +29,7 @@ rules:
   allow_editor_headless: true
 
 agents:
-  # -----------------------
+  # ----------------------
   # CORE AGENTS (unchanged)
   # ----------------------
   codegen-agent:
